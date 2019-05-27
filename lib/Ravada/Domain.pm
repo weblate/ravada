@@ -1158,8 +1158,12 @@ Returns a file with the display information. Defaults to spice.
 
 =cut
 
-sub display_file($self,$user) {
-    return $self->_display_file_spice($user);
+sub display_file($self,$user,$screen = 'spice') {
+    if ($screen eq 'spice') {
+        return $self->_display_file_spice($user);
+    } else {
+        die "Error: Unknown screen type '$screen'";
+    }
 }
 
 sub _around_display_file_tls($orig, $self, $user) {
