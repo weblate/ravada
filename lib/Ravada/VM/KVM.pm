@@ -726,11 +726,13 @@ sub _domain_create_from_iso {
     }
     my $remove_cpu = delete $args2{remove_cpu};
     for (qw(disk swap active request vm memory iso_file id_template volatile spice_password
+            screen
             listen_ip)) {
         delete $args2{$_};
     }
 
     my $iso_file = delete $args{iso_file};
+
     confess "Unknown parameters : ".join(" , ",sort keys %args2)
         if keys %args2;
 
@@ -813,11 +815,30 @@ sub _domain_create_common {
     my $user = Ravada::Auth::SQL->search_by_id($id_owner)
         or confess "ERROR: User id $id_owner doesn't exist";
 
+    my $remote_ip = delete $args{remote_ip};
+    my %screen;
+    {
+        my $screen = (delete $args{screen} or 'spice');
+        $screen = [$screen] if !ref($screen);
+        for my $screen0 (@$screen) {
+            confess "Error: Unknown graphics device '$screen'" if $screen0 !~ /^(spice|x2go)$/;
+        }
+        %screen = map { lc($_) => 1 } @$screen;
+    }
+
+    if ($screen{'spice'}) {
+        if ($remote_ip) {
+            my $network = Ravada::Network->new(address => $remote_ip);
+            $spice_password = undef if !$network->requires_password;
+        }
+        $self->_xml_modify_spice_port($xml, $spice_password);
+    } else {
+        $self->_xml_remove_spice($xml);
+    }
     $self->_xml_modify_memory($xml,$args{memory})   if $args{memory};
     $self->_xml_modify_network($xml , $args{network})   if $args{network};
     $self->_xml_modify_mac($xml);
     my $uuid = $self->_xml_modify_uuid($xml);
-    $self->_xml_modify_spice_port($xml, $spice_password, $listen_ip);
     $self->_fix_pci_slots($xml);
     $self->_xml_add_guest_agent($xml);
     $self->_xml_clean_machine_type($xml) if !$self->is_local;
@@ -987,7 +1008,7 @@ sub _domain_create_from_base {
     $domain->_insert_db(name=> $args{name}, id_base => $base->id, id_owner => $args{id_owner}
         , id_vm => $self->id
     );
-    $domain->_set_spice_password($spice_password);
+    $domain->_set_spice_password($spice_password) if $args{screen} eq 'spice';
     $domain->xml_description();
     return $domain;
 }
@@ -1529,6 +1550,16 @@ sub _xml_modify_spice_port($self, $doc, $password=undef, $listen_ip=$self->liste
 
     $listen->setAttribute(type => 'address');
     $listen->setAttribute(address => $listen_ip);
+}
+
+sub _xml_remove_spice($self, $doc){
+    for my $devices ($doc->findnodes('/domain/devices')) {
+        for my $graph ( $devices->findnodes('graphics')) {
+            if ($graph->getAttribute('type') =~ /^spice$/i) {
+                $devices->removeChild($graph);
+            }
+        }
+    }
 }
 
 sub _xml_modify_uuid {
