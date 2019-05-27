@@ -131,10 +131,19 @@ sub vm_names {
     return sort keys %ARG_CREATE_DOM;
 }
 
-sub create_domain {
-    my $vm_name = shift;
-    my $user = (shift or $USER_ADMIN);
-    my $id_iso = (shift or 'Alpine');
+sub create_domain(@args) {
+    if (scalar @args == 1 ) {
+        @args = ( vm => $args[0] );
+    }
+    my %args = @args;
+
+       my $user = (delete $args{user} or $USER_ADMIN);
+     my $id_iso = (delete $args{id_iso} or 'Alpine');
+     my $screen = delete $args{screen};
+     my $active = (delete $args{active} or 0);
+    my $vm_name = delete $args{vm};
+
+    confess "Error: unknown args ".Dumper(\%args) if keys %args;
 
     $vm_name = 'KVM' if $vm_name eq 'qemu';
 
@@ -164,9 +173,10 @@ sub create_domain {
     eval { $domain = $vm->create_domain(name => $name
                     , id_owner => $user->id
                     , %arg_create
-                    , active => 0
+                    , active => $active
                     , memory => 256*1024
                     , disk => 1 * 1024 * 1024
+                    , screen => $screen
            );
     };
     is('',''.$@);
