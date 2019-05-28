@@ -667,6 +667,25 @@ get '/machine/autostart/#id/#value' => sub {
     return $c->render(json => { request => $req->id});
 };
 
+get '/machine/display/(:type)/(:id).(:ext)' => sub {
+    my $c = shift;
+
+    my $id = $c->stash('id');
+
+    my $domain = $RAVADA->search_domain_by_id($id);
+    return $c->render(text => "unknown machine id=$id") if !$id;
+
+    return access_denied($c)
+        if $USER->id ne $domain->id_owner
+        && !$USER->is_admin;
+
+    $c->res->headers->content_type('application/'.$c->stash('type'));
+    $c->res->headers->content_disposition(
+        "inline;filename=".$domain->id.".".$c->stash('ext'));
+
+    return $c->render(data => $domain->display_file($USER,$c->stash('type')));
+};
+
 get '/machine/display/(:id).vv' => sub {
     my $c = shift;
 
