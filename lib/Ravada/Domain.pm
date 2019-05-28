@@ -1161,6 +1161,10 @@ Returns a file with the display information. Defaults to spice.
 sub display_file($self,$user,$screen = 'spice') {
     if ($screen eq 'spice') {
         return $self->_display_file_spice($user);
+    } elsif ($screen eq 'spice-tls') {
+        return $self->_display_file_spice($user,1);
+    } elsif ($screen eq 'x2go') {
+        return $self->_display_file_x2go($user);
     } else {
         die "Error: Unknown screen type '$screen'";
     }
@@ -1180,6 +1184,50 @@ sub display_file_tls($self, $user) {
 sub display($self, $user) {
     my $display_info = $self->display_info($user);
     return $display_info->{display};
+}
+
+sub _timestamp {
+    my @now = localtime(time);
+    $now[5] += 1900;
+    for ( 0 .. 4 ) {
+        $now[$_] = "0".$now[$_] if length($now[$_]) < 2;
+    }
+    return join("",reverse(@now[0..5]));
+}
+
+sub _display_file_x2go($self, $user) {
+    my $display = $self->display_info($user);
+    my $ret = "["._timestamp()."]\n"
+."speed=3
+pack=2m-jpeg
+quality=8
+fullscreen=true
+multidisp=false
+display=1
+maxdim=false
+width=800
+height=600
+dpi=96
+setdpi=true
+xinerama=false
+clipboard=both
+usekbd=true
+type=auto
+sshport=22
+sound=true
+soundsystem=pulse
+startsoundsystem=true
+soundtunnel=true
+name=mint
+host=".$display->{ip}."
+user=
+rootless=false
+published=false
+command=XFCE
+usesshproxy=false
+"
+    ;
+    return $ret;
 }
 
 # taken from isard-vdi thanks to @tuxinthejungle Alberto Larraz
