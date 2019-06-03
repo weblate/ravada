@@ -43,7 +43,7 @@ sub test_spice($vm) {
     ok($display_spice);
 
     my $display_x2go = $domain->display_file(user_admin,'x2go');
-    ok(!$display_x2go);
+    ok($display_x2go,'');
 
     $domain->remove(user_admin);
 }
@@ -55,11 +55,15 @@ sub test_x2go($vm) {
 
     is(scalar @graph, 0);
 
-    my $display_spice = $domain->display_file(user_admin,'spice');
+    my $display_spice;
+    eval { $display_spice = $domain->display_file(user_admin,'spice') };
+    like($@,qr/I can't find graphics/);
     ok(!$display_spice);
 
-    my $display_x2go = $domain->display_file(user_admin,'x2go');
-    ok($display_x2go);
+    my $display_x2go;
+    eval { $display_x2go = $domain->display_file(user_admin,'x2go') };
+    like($@,qr'expose port');
+    is($display_x2go,'');
 
     $domain->remove(user_admin);
 }
