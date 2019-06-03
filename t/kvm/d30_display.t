@@ -33,11 +33,14 @@ sub test_unknown($vm) {
 
 sub test_spice($vm) {
     my $domain = create_domain(vm => $vm, screen => 'spice', active => 1);
-    my $doc = XML::LibXML->load_xml( string => $domain->xml_description());
-    my @graph = $doc->findnodes('/domain/devices/graphics');
 
-    is(scalar @graph, 1);
-    is($graph[0]->getAttribute('type'), 'spice') if $graph[0];
+    if ($vm->type =~ /KVM/) {
+        my $doc = XML::LibXML->load_xml( string => $domain->xml_description());
+        my @graph = $doc->findnodes('/domain/devices/graphics');
+
+        is(scalar @graph, 1);
+        is($graph[0]->getAttribute('type'), 'spice') if $graph[0];
+    }
 
     my $display_spice = $domain->display_file(user_admin,'spice');
     ok($display_spice);
@@ -88,7 +91,7 @@ sub test_x2go_spice($vm) {
 
 ########################################################################
 
-for my $vm_name ( 'KVM' ) {
+for my $vm_name ( vm_names() ) {
   my $vm;
 
     eval { $vm = rvd_back->search_vm($vm_name) };
