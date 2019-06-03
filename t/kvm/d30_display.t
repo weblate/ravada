@@ -43,7 +43,7 @@ sub test_spice($vm) {
     ok($display_spice);
 
     my $display_x2go = $domain->display_file(user_admin,'x2go');
-    ok(!$display_x2go);
+    ok($display_x2go,'');
 
     $domain->remove(user_admin);
 }
@@ -55,17 +55,21 @@ sub test_x2go($vm) {
 
     is(scalar @graph, 0);
 
-    my $display_spice = $domain->display_file(user_admin,'spice');
+    my $display_spice;
+    eval { $display_spice = $domain->display_file(user_admin,'spice') };
+    like($@,qr/I can't find graphics/);
     ok(!$display_spice);
 
-    my $display_x2go = $domain->display_file(user_admin,'x2go');
-    ok($display_x2go);
+    my $display_x2go;
+    eval { $display_x2go = $domain->display_file(user_admin,'x2go') };
+    like($@,qr'expose port');
+    is($display_x2go,'');
 
     $domain->remove(user_admin);
 }
 
 sub test_x2go_spice($vm) {
-    my $domain = create_domain(vm => $vm, screen => ['spice','x2go']);
+    my $domain = create_domain(vm => $vm, screen => ['spice','x2go'] , active => 1);
     my $doc = XML::LibXML->load_xml( string => $domain->xml_description());
     my @graph = $doc->findnodes('/domain/devices/graphics');
 
@@ -73,7 +77,7 @@ sub test_x2go_spice($vm) {
     is($graph[0]->getAttribute('type'), 'spice') if $graph[0];
 
     my $display_spice = $domain->display_file(user_admin,'spice');
-    ok(!$display_spice);
+    ok($display_spice);
 
     my $display_x2go = $domain->display_file(user_admin,'spice');
     ok($display_x2go);
