@@ -384,7 +384,7 @@ sub _around_create_domain {
      delete $args{request};
      delete $args{iso_file};
      delete $args{id_template};
-     delete @args{'description','remove_cpu','vm','start','screen'};
+     delete @args{'description','remove_cpu','vm','start'};
 
     confess "ERROR: Unknown args ".Dumper(\%args) if keys %args;
 
