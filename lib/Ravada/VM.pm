@@ -374,7 +374,7 @@ sub _around_create_domain {
     my $id_base = delete $args{id_base};
      my $id_iso = delete $args{id_iso};
      my $active = delete $args{active};
-     my $screen = delete $args{screen};
+     my $screen = ( delete $args{screen} or '' );
        my $name = delete $args{name};
        my $swap = delete $args{swap};
 
