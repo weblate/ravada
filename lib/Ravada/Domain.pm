@@ -1196,7 +1196,13 @@ sub _timestamp {
 }
 
 sub _display_file_x2go($self, $user) {
-    my $display = $self->display_info($user);
+
+    my $port = $self->exposed_port('x2go');
+    my $ip = ( $self->_vm->nat_ip
+            or $self->_vm->public_ip
+            or Ravada::display_ip()
+            or $self->_vm->ip
+    );
     my $ret = "["._timestamp()."]\n"
 ."speed=3
 pack=2m-jpeg
@@ -1213,13 +1219,13 @@ xinerama=false
 clipboard=both
 usekbd=true
 type=auto
-sshport=22
+sshport=$port
 sound=true
 soundsystem=pulse
 startsoundsystem=true
 soundtunnel=true
 name=mint
-host=".$display->{ip}."
+host=$ip
 user=
 rootless=false
 published=false
