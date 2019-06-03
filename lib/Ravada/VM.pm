@@ -374,6 +374,7 @@ sub _around_create_domain {
     my $id_base = delete $args{id_base};
      my $id_iso = delete $args{id_iso};
      my $active = delete $args{active};
+     my $screen = delete $args{screen};
        my $name = delete $args{name};
        my $swap = delete $args{swap};
 
@@ -383,7 +384,7 @@ sub _around_create_domain {
      delete $args{request};
      delete $args{iso_file};
      delete $args{id_template};
-     delete @args{'description','remove_cpu','vm','start','screen'};
+     delete @args{'description','remove_cpu','vm','start'};
 
     confess "ERROR: Unknown args ".Dumper(\%args) if keys %args;
 
@@ -423,6 +424,7 @@ sub _around_create_domain {
     };
     die $@ if $@ && $@ !~ /code: 55,/;
 
+    $domain->expose(22,'x2go') if grep /^x2go$/i,@$screen;
     $domain->info($owner);
     $domain->display($owner)    if $domain->is_active;
 
