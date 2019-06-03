@@ -378,6 +378,8 @@ sub _around_create_domain {
        my $name = delete $args{name};
        my $swap = delete $args{swap};
 
+     $screen = [$screen] if !ref($screen);
+
      # args get deleted but kept on @_ so when we call $self->$orig below are passed
      delete $args{disk};
      delete $args{memory};
