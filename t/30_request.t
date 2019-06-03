@@ -227,7 +227,7 @@ sub test_requests_by_domain {
     my $vm_name = shift;
 
     my $vm = rvd_back->search_vm($vm_name);
-    my $domain = create_domain($vm_name, user_admin);
+    my $domain = create_domain($vm_name);
     ok($domain,"Expecting new domain created") or exit;
 
     my $req1 = Ravada::Request->prepare_base(uid => user_admin->id, id_domain => $domain->id);

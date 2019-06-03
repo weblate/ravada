@@ -134,6 +134,8 @@ sub vm_names {
 sub create_domain(@args) {
     if (scalar @args == 1 ) {
         @args = ( vm => $args[0] );
+    } elsif ( scalar @args == 2 && $args[1] =~ /Auth::SQL/ ) {
+        @args = ( vm => $args[0] , user => $args[1] );
     }
     my %args = @args;
 

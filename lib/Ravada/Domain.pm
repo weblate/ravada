@@ -1197,7 +1197,7 @@ sub _timestamp {
 
 sub _display_file_x2go($self, $user) {
 
-    my $port = $self->exposed_port('x2go');
+    my $port = $self->exposed_port('x2go') or return;
     my $ip = ( $self->_vm->nat_ip
             or $self->_vm->public_ip
             or Ravada::display_ip()
