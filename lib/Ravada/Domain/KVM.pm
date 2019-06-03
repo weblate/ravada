@@ -612,7 +612,7 @@ sub display_info($self, $user) {
 
     my $xml = XML::LibXML->load_xml(string => $self->xml_description);
     my ($graph) = $xml->findnodes('/domain/devices/graphics')
-        or die "ERROR: I can't find graphic";
+        or confess "ERROR: I can't find graphics in ".$self->name;
 
     my ($type) = $graph->getAttribute('type');
     my ($port) = $graph->getAttribute('port');
