@@ -19,10 +19,9 @@ use_ok('Ravada');
 
 # Forward one port
 sub test_one_port($vm) {
+    my $domain = _create_domain_with_ip($vm);
 
     flush_rules();
-
-    my $domain = create_domain($vm->type, user_admin ,'debian stretch');
 
     my $remote_ip = '10.0.0.1';
     my $local_ip = $vm->ip;
@@ -32,7 +31,7 @@ sub test_one_port($vm) {
     my $client_ip = $domain->remote_ip();
     is($client_ip, $remote_ip);
 
-    _wait_ip($vm->type, $domain);
+    wait_ip( $domain);
 
     my $domain_ip = $domain->ip;
     ok($domain_ip,"[".$vm->type."] Expecting an IP for domain ".$domain->name.", got ".($domain_ip or '')) or return;
@@ -45,11 +44,15 @@ sub test_one_port($vm) {
     };
     is($@,'',"[".$vm->type."] export port $internal_port");
 
-    my $port_info_no = $domain->exposed_port(456);
-    is(!$port_info_no);
+    my $port_info_no;
+    eval { $port_info_no = $domain->exposed_port(456) };
+    like($@,qr/not found/i);
 
-    $port_info_no = $domain->exposed_port('no');
-    is(!$port_info_no);
+    is($port_info_no, undef);
+
+    eval { $port_info_no = $domain->exposed_port('no') };
+    like($@,qr/not found/i);
+    is($port_info_no, undef);
 
     my $port_info = $domain->exposed_port($name_port);
     ok($port_info) && do {
@@ -69,6 +72,8 @@ sub test_one_port($vm) {
     is($info->{ports}->[0]->{internal_port}, $internal_port);
     is($info->{ports}->[0]->{public_port}, $public_port);
     is($info->{ports}->[0]->{name}, $name_port);
+
+    _wait_requests($domain);
 
     my ($n_rule)
         = search_iptable_remote(local_ip => "$local_ip/32"
@@ -134,16 +139,12 @@ sub test_one_port($vm) {
 
     ok(!$n_rule,"Expecting no rule for -> $local_ip:$public_port") or exit;
 
+    is(scalar $domain->list_ports,0);
 }
 
 # Remove expose port
-sub test_remove_expose {
-    my $vm_name = shift;
-    my $request = shift;
-
-    my $vm = rvd_back->search_vm($vm_name);
-
-    my $domain = create_domain($vm_name, user_admin,'debian stretch');
+sub test_remove_expose($domain, $request) {
+    my $vm = $domain->_vm;
 
     my $remote_ip = '10.0.0.1';
     my $local_ip = $vm->ip;
@@ -156,16 +157,17 @@ sub test_remove_expose {
     #    my $client_user = $domain->remote_user();
     # is($client_user->id, user_admin->id);
 
-    _wait_ip($vm_name, $domain);
+    wait_ip($domain);
 
     my $domain_ip = $domain->ip;
-    ok($domain_ip,"[$vm_name] Expecting an IP for domain ".$domain->name.", got ".($domain_ip or '')) or return;
+    ok($domain_ip,"[".$vm->type."] Expecting an IP for domain ".$domain->name.", got ".($domain_ip or '')) or return;
 
     my $internal_port = 22;
     my ($public_port0) = $domain->expose($internal_port);
     ok($public_port0,"Expecting a public port") or exit;
 
     is(scalar $domain->list_ports,1);
+    rvd_back->_process_requests_dont_fork(1);
 
     #    my ($public_ip, $public_port) = $domain->public_address($internal_port);
     #    is($public_ip, $public_ip0);
@@ -224,6 +226,8 @@ sub test_remove_expose {
     );
 
     ok(!$n_rule,"Expecting no rule for -> $local_ip:$public_port") or exit;
+
+    is(scalar $domain->list_ports,0);
 }
 
 sub test_req_remove_expose {
@@ -232,13 +236,9 @@ sub test_req_remove_expose {
 }
 
 # Remove crash a domain and see if ports are closed after cleanup
-sub test_crash_domain($vm_name) {
+sub test_crash_domain($domain) {
+    my $vm = $domain->_vm;
     flush_rules();
-
-    my $vm = rvd_back->search_vm($vm_name);
-
-
-    my $domain = create_domain($vm_name, user_admin,'debian stretch');
 
     my $remote_ip = '10.0.0.1';
     my $local_ip = $vm->ip;
@@ -248,15 +248,17 @@ sub test_crash_domain($vm_name) {
     my $client_ip = $domain->remote_ip();
     is($client_ip, $remote_ip);
 
-    _wait_ip($vm_name, $domain);
+    wait_ip($domain);
 
     my $domain_ip = $domain->ip or do {
-        diag("[$vm_name] Expecting an IP for domain ".$domain->name);
+        diag("[".$vm->type."] Expecting an IP for domain ".$domain->name);
         return;
     };
 
     my $internal_port = 22;
     my $public_port = $domain->expose($internal_port);
+
+    _wait_requests($domain);
 
     is(scalar $domain->list_ports,1);
     my ($n_rule)
@@ -275,17 +277,20 @@ sub test_crash_domain($vm_name) {
     # shutdown forced
     shutdown_domain_internal($domain);
 
-    my $domain2 = create_domain($vm_name, user_admin,'debian stretch');
+    my $domain2 = create_domain($vm->type, user_admin,'debian stretch');
     $domain2->start(user => user_admin) if !$domain2->is_active;
 
     $domain2->remove(user_admin);
+
+    $domain->remove_expose($internal_port);
+    is(scalar $domain->list_ports,0);
 }
 
-sub test_two_ports($vm) {
+sub test_two_ports($domain) {
+    my $vm = $domain->_vm;
 
     flush_rules();
-
-    my $domain = create_domain($vm, user_admin,'debian stretch');
+    is(scalar($domain->list_ports), 0);
 
     my $remote_ip = '10.0.0.1';
     my $local_ip = $vm->ip;
@@ -306,6 +311,8 @@ sub test_two_ports($vm) {
 
     my $internal_port2 = 20;
     my $public_port2 = $domain->expose($internal_port2);
+
+    _wait_requests($domain);
 
     ok($public_port1 ne $public_port2,"Expecting two different ports "
         ." $public_port1 $public_port2 ");
@@ -339,6 +346,10 @@ sub test_two_ports($vm) {
 
         ok(!$n_rule,"Expecting no rule for -> $local_ip:$public_port") or exit;
     }
+    for my $public_port ( $internal_port1, $internal_port2 ) {
+        $domain->remove_expose($public_port);
+    }
+    is(scalar $domain->list_ports,0);
 }
 
 sub test_clone_exports($vm) {
@@ -362,31 +373,8 @@ sub test_clone_exports($vm) {
     $base->remove(user_admin);
 }
 
-sub _wait_ip {
-    my $vm_name = shift;
-    my $domain = shift  or confess "Missing domain arg";
-
-    return if $domain->_vm->type !~ /kvm|qemu/i;
-    return $domain->ip  if $domain->ip;
-
-    sleep 1;
-    eval ' $domain->domain->send_key(Sys::Virt::Domain::KEYCODE_SET_LINUX,200, [28]) ';
-    die $@ if $@;
-
-    return if $@;
-    sleep 2;
-    for ( 1 .. 12 ) {
-        rvd_back->_process_requests_dont_fork();
-        eval ' $domain->domain->send_key(Sys::Virt::Domain::KEYCODE_SET_LINUX,200, [28]) ';
-        die $@ if $@;
-        sleep 2;
-    }
-    for (1 .. 30) {
-        last if $domain->ip;
-        sleep 1;
-        diag("waiting for ".$domain->name." ip") if $_ ==10;
-    }
-    return $domain->ip;
+sub _wait_ip($vm_name, $domain) {
+    return wait_ip($domain);
 }
 
 sub add_network_10 {
@@ -406,19 +394,14 @@ sub add_network_10 {
 
 
 # expose a port when the host is down
-sub test_host_down {
-    my $vm_name = shift;
+sub test_host_down($domain) {
+    my $vm = $domain->_vm;
 
     flush_rules();
-
-    my $vm = rvd_back->search_vm($vm_name);
-
-    my $domain = create_domain($vm_name, user_admin,'debian stretch');
+    is(scalar $domain->list_ports,0);
 
     my $remote_ip = '10.0.0.1';
     my $local_ip = $vm->ip;
-
-    $domain->shutdown_now(user_admin)    if $domain->is_active;
 
     my $internal_port = 22;
     my ($public_port);
@@ -427,11 +410,11 @@ sub test_host_down {
 
     $domain->start(user => user_admin, remote_ip => $remote_ip);
 
-    _wait_ip($vm_name, $domain);
+    wait_ip($domain);
     rvd_back->_process_requests_dont_fork();
 
     my $domain_ip = $domain->ip;
-    ok($domain_ip,"[$vm_name] Expecting an IP for domain ".$domain->name.", got ".($domain_ip or '')) or return;
+    ok($domain_ip,"[".$vm->type."] Expecting an IP for domain ".$domain->name.", got ".($domain_ip or '')) or return;
 
     is(scalar $domain->list_ports,1);
 
@@ -460,18 +443,21 @@ sub test_host_down {
     );
 
     ok(!$n_rule,"Expecting no rule for -> $local_ip:$public_port") or exit;
+    $domain->remove_expose($internal_port);
+    is(scalar $domain->list_ports,0);
 }
 
-sub test_req_expose($vm_name) {
-    flush_rules();
+sub test_req_expose($domain) {
 
-    my $domain = create_domain($vm_name, user_admin,'debian stretch');
+    my $vm = $domain->_vm;
+    flush_rules();
+    is(scalar $domain->list_ports,0);
 
     my $remote_ip = '10.0.0.6';
 
     $domain->start(user => user_admin, remote_ip => $remote_ip);
 
-    _wait_ip($vm_name, $domain);
+    wait_ip($domain);
 
     my $internal_port = 22;
     my $req = Ravada::Request->expose(
@@ -488,7 +474,8 @@ sub test_req_expose($vm_name) {
     is(scalar @list_ports,1) or exit;
     my $public_port = $list_ports[0]->{public_port};
 
-    my $vm = rvd_back->search_vm($vm_name);
+    _wait_requests($domain);
+
     my $local_ip = $vm->ip;
     my $domain_ip = $domain->ip;
 
@@ -517,6 +504,7 @@ sub test_req_expose($vm_name) {
 
     ok(!$n_rule,"Expecting no rule for -> $local_ip:$public_port") or exit;
 
+    is(scalar $domain->list_ports,0);
 }
 
 sub test_can_expose_ports {
@@ -533,21 +521,35 @@ sub test_can_expose_ports {
 
 }
 
-sub test_restricted($vm, $restricted) {
+sub _create_domain_with_ip($vm) {
+    my $domain = create_domain(vm => $vm->type
+        ,user => user_admin
+        ,id_iso => 'debian Stretch'
+        ,memory => 1024 * 1024
+        ,id_iso => 'debian Stretch'
+    );
+    my $local_ip = $vm->ip;
+
+    $domain->start(user => user_admin);
+    wait_ip($domain);
+    return $domain;
+}
+
+sub test_restricted($domain, $restricted) {
+    my $vm = $domain->_vm;
+
     flush_rules();
     flush_rules_node($vm);
 
-    my $domain = create_domain($vm->type, user_admin,'debian Stretch');
-
     my $local_ip = $vm->ip;
-    my $remote_ip = '10.0.0.6';
 
+    my $remote_ip = '10.0.0.1';
     $domain->start(user => user_admin, remote_ip => $remote_ip);
-
-    _wait_ip($vm->type, $domain);
+    wait_ip($domain);
 
     my $internal_port = 22;
     $domain->expose(port => $internal_port, restricted => $restricted);
+    _wait_requests($domain);
 
     my @list_ports = $domain->list_ports();
     is(scalar @list_ports,1) or exit;
@@ -572,7 +574,8 @@ sub test_restricted($vm, $restricted) {
 
 
     if ($restricted) {
-        ok($n_rule,"Expecting rule for $remote_ip -> $local_ip:$public_port") or exit;
+        ok($n_rule,"Expecting rule for $remote_ip -> $local_ip:$public_port\n".$domain->type." ".$domain->name)
+            or exit;
         ok($n_rule_drop,"Expecting drop rule for any -> $local_ip:$public_port") or exit;
     } else {
         ok(!$n_rule,"Expecting no rule for $remote_ip -> $local_ip:$public_port") or exit;
@@ -598,11 +601,12 @@ sub test_restricted($vm, $restricted) {
     ok(!$n_rule,"Expecting no rule for $remote_ip -> $local_ip:$public_port") or exit;
     ok(!$n_rule_drop,"Expecting drop no rule for any -> $local_ip:$public_port") or exit;
 
-    $domain->remove(user_admin);
+    $domain->remove_expose($internal_port);
+
+    is(scalar($domain->list_ports),0);
 }
 
-sub test_change_expose($vm, $restricted) {
-    my $domain = create_domain($vm->type, user_admin,'debian');
+sub test_change_expose($domain, $restricted) {
 
     my $internal_port = 22;
     my $name = "foo";
@@ -628,11 +632,11 @@ sub test_change_expose($vm, $restricted) {
     is($list_ports[0]->{restricted}, $restricted);
     is($list_ports[0]->{name}, $name);
 
-    $domain->remove(user_admin);
+    $domain->remove_expose($internal_port);
+    is(scalar($domain->list_ports),0);
 }
 
-sub test_change_expose_3($vm) {
-    my $domain = create_domain($vm->type, user_admin,'debian stretch');
+sub test_change_expose_3($domain) {
 
     my $internal_port = 100;
     my $name = "foo";
@@ -645,7 +649,7 @@ sub test_change_expose_3($vm) {
     my $remote_ip = '10.0.0.4';
     $domain->start(user => user_admin, remote_ip => $remote_ip);
 
-    _wait_ip($vm->type, $domain);
+    wait_ip($domain);
     rvd_back->_process_requests_dont_fork(1);
 
     _check_port_rules($domain, $remote_ip,"Checking rules for ".$domain->name);
@@ -658,8 +662,12 @@ sub test_change_expose_3($vm) {
             ,"Changed port $port->{internal_port} restricted=$restricted");
     }
 
-    $domain->remove(user_admin);
+    for my $port ($domain->list_ports) {
+        $domain->remove_expose($port->{internal_port});
+    }
+    is(scalar($domain->list_ports),0);
 }
+
 sub _check_port_rules($domain, $remote_ip, $msg='') {
     for my $port ( $domain->list_ports ) {
         my ($n_rule, $n_rule_drop, $n_rule_nat)
@@ -706,6 +714,25 @@ sub _search_rules($domain, $remote_ip, $internal_port, $public_port) {
     return($n_rule, $n_rule_drop, $n_rule_nat);
 }
 
+sub _wait_requests($domain) {
+    for ( 1 .. 120 ) {
+        rvd_back->_process_requests_dont_fork(1);
+        last if !$domain->list_requests(1);
+        sleep 1;
+    }
+}
+
+sub test_errors($domain) {
+    my $port = 55;
+    $domain->expose($port);
+
+    eval { $domain->remove_expose($port+1) };
+    like($@,qr(not exposed));
+
+    $domain->remove_expose($port);
+
+    is($domain->list_ports,0);
+}
 ##############################################################
 
 clean();
@@ -720,23 +747,28 @@ for my $vm_name ( 'KVM', 'Void' ) {
 
     diag("Testing $vm_name");
 
-    test_restricted($vm,0);
-    test_restricted($vm,1);
+    my $domain = _create_domain_with_ip($vm);
+    test_restricted($domain,1);
+    test_restricted($domain,0);
 
-    test_change_expose($vm, 0);
-    test_change_expose($vm, 1);
+    test_change_expose($domain, 0);
+    test_change_expose($domain, 1);
 
-    test_change_expose_3($vm);
+    test_change_expose_3($domain);
 
-    test_host_down($vm_name);
+    test_host_down($domain);
 
-    test_req_remove_expose($vm_name);
-    test_crash_domain($vm_name);
-    test_req_expose($vm_name);
+    test_req_remove_expose($domain);
+    test_crash_domain($domain);
 
     test_one_port($vm);
-    test_two_ports($vm);
+    test_two_ports($domain);
 
+    test_errors($domain);
+
+    test_req_expose($domain);
+    $domain = undef;
+    # domain is removed in previous test
     test_clone_exports($vm);
 
 }

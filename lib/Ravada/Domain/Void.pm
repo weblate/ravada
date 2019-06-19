@@ -32,6 +32,8 @@ our %CHANGE_HARDWARE_SUB = (
 
 our $CONVERT = `which convert`;
 chomp $CONVERT;
+
+our $PORT = "5990";
 #######################################3
 
 sub name {
@@ -39,23 +41,41 @@ sub name {
     return $self->domain;
 };
 
-sub display_info {
-    my $self = shift;
+sub display_info($self, $user=undef, $type=undef) {
+
+    my $hardware = $self->_value('hardware');
+    my $screen = $hardware->{screen};
+
+    my ($found_screen) = @$screen;
+
+    if (!$type) {
+        $type = $found_screen->{type};
+    }
+
+    confess "Error: I can't find graphics for screen ".($type or '<ANY>')." in ".$self->name
+        ."\n".Dumper($screen) if !$found_screen;
 
     my $display_data = $self->_value('display');
     if (!keys %$display_data) {
-        $display_data = $self->_set_display();
+        $display_data = $self->_set_display(undef, $type);
     }
     return $display_data;
 }
 
-sub _set_display($self, $remote_ip=undef) {
+sub _set_display($self, $remote_ip=undef, $type=$self->_screen_type) {
+
+    confess "Error: undefined type" if !defined $type;
+
     #    my $ip = ($self->_vm->nat_ip or $self->_vm->ip());
     my $ip = ( $self->_listen_ip($remote_ip) or $self->_vm->ip );
-    my $display="void://$ip:5990/";
-    my $display_data = { display => $display , type => 'void', ip => $ip, port => 5990 };
-    $self->_store( display => $display_data );
-    return $display_data;
+
+    for my $screen ( $self->get_controller('screen') ) {
+        next if $screen->{type} ne $type;
+        $screen->{ip} = $ip;
+        $self->_store(display => $screen);
+        return $screen;
+    }
+    die "Error: I can't find graphics type '$type' ".Dumper([$self->get_controller('screen')]);
 }
 
 sub is_active {
@@ -481,8 +501,7 @@ sub get_info {
     return $info;
 }
 
-sub _set_default_info {
-    my $self = shift;
+sub _set_default_info($self, $screen = 'void') {
     my $info = {
             max_mem => 512*1024
             ,memory => 512*1024,
@@ -494,8 +513,24 @@ sub _set_default_info {
     $self->_store(info => $info);
     my %controllers = $self->list_controllers;
     for my $name ( sort keys %controllers) {
-        next if $name eq 'disk';
+        next if $name eq 'disk' || $name eq 'screen';
         $self->set_controller($name,2);
+    }
+    $screen = [ $screen ] if !ref($screen);
+    my $port = $PORT;
+    for my $n ( 0 .. scalar(@$screen)-1) {
+        my $type = $screen->[$n];
+        my $data = {
+            type => $type
+            ,display => "$type://".$self->_vm->ip.":".$port
+        };
+        if ($type eq 'x2go') {
+            $data->{public_port} = $port;
+        } else {
+            $data->{port} = $port;
+        }
+        $port++;
+        $self->set_controller('screen',$n+1, $data);
     }
     return $info;
 }
@@ -642,7 +677,7 @@ sub autostart {
     return $self->_value('autostart');
 }
 
-sub set_controller($self, $name, $number=undef, $data=undef) {
+sub set_controller($self, $name, $number=undef, $data='foo') {
     my $hardware = $self->_value('hardware');
 
     return $self->_set_controller_disk($data) if $name eq 'disk';
@@ -651,9 +686,16 @@ sub set_controller($self, $name, $number=undef, $data=undef) {
 
     $number = $#$list if !defined $number;
 
+    confess if $name eq 'screen' && !ref($data);
+    my $ip = $self->_vm->ip;
+
     if ($number > $#$list) {
         for ( $#$list+1 .. $number-1 ) {
-            push @$list,("foo ".($_+1));
+            if ($name eq 'screen') {
+                push @$list,$data;
+            } else {
+                push @$list,("$data ".($_+1));
+            }
         }
     } else {
         $#$list = $number-1;
@@ -760,4 +802,7 @@ sub change_hardware($self, $hardware, $index, $data) {
 sub dettach($self,$user) {
     # no need to do anything to dettach mock volumes
 }
+
+
+
 1;

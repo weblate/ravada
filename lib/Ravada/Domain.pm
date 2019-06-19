@@ -798,13 +798,19 @@ sub _allowed {
 
 }
 
-sub _around_display_info($orig,$self,$user ) {
+sub _around_display_info($orig,$self,$user, $type=$self->_screen_type) {
     $self->_allowed($user);
-    my $display = $self->$orig($user);
+    my $display = $self->$orig($user, $type);
 
     if (!$self->readonly) {
         $self->_set_display_ip($display);
-        $self->_data(display => encode_json($display));
+
+        my $info = {};
+        my $json_display = $self->_data('display');
+        $info = decode_json($json_display) if $json_display;
+
+        $info->{$type} = $display;
+        $self->_data(display => encode_json($info));
     }
     return $display;
 }
@@ -1158,27 +1164,38 @@ Returns a file with the display information. Defaults to spice.
 
 =cut
 
-sub display_file($self,$user,$screen = 'spice') {
-    if ($screen eq 'spice') {
-        return $self->_display_file_spice($user);
-    } elsif ($screen eq 'spice-tls') {
-        return $self->_display_file_spice($user,1);
-    } elsif ($screen eq 'x2go') {
-        return $self->_display_file_x2go($user);
-    } else {
-        die "Error: Unknown screen type '$screen'";
+sub display_file($self, $user, $screen = $self->_screen_type) {
+
+    my $sub = $self->_display_file_sub($screen);
+    confess "Error: Unknown screen type '$screen'" if !$sub;
+
+    my $file = $sub->($self,$user);
+
+    my $data_json = $self->_data('display_file');
+    my $data = {};
+    $data = decode_json($data_json) if $data_json;
+    $data->{$screen} = $file;
+
+    $self->_data('display_file', encode_json($data));
+
+    if ($screen eq 'spice' && $self->_vm->tls_ca) {
+        my $display = $self->display_info($user,'spice');
+        $self->display_file($user,'spice-tls')
     }
+    return $file;
 }
 
-sub _around_display_file_tls($orig, $self, $user) {
-    my $display_file = $self->$orig($user);
-    if (!$self->readonly) {
-        $self->_data(display_file => $display_file);
-    }
-    return $display_file;
-}
-sub display_file_tls($self, $user) {
-    return $self->_display_file_spice($user,1);
+sub _display_file_sub($self,$screen) {
+    my $sub = $self->_display_file_sub_local($screen);
+    return $sub if $sub;
+
+    my %sub = (
+        spice => \&_display_file_spice
+        , 'spice-tls' => \&_display_file_spice_tls
+        , x2go => \&_display_file_x2go
+    );
+
+    return $sub{$screen};
 }
 
 sub display($self, $user) {
@@ -1195,14 +1212,26 @@ sub _timestamp {
     return join("",reverse(@now[0..5]));
 }
 
-sub _display_file_x2go($self, $user) {
+sub _display_info_x2go($self, $user) {
 
-    my $port = $self->exposed_port('x2go') or return;
+    confess "Error: No access to the VM" if !$self->_vm;
+
+    my $port = $self->exposed_port('x2go') or die "Error: Not exposed port for x2go";
     my $ip = ( $self->_vm->nat_ip
             or $self->_vm->public_ip
             or Ravada::display_ip()
             or $self->_vm->ip
     );
+    my %info = %$port;
+    $info{ip} = $ip;
+    $info{display} = "x2go://$ip:".$port->{public_port};
+    return \%info;
+
+}
+
+sub _display_file_x2go($self, $user) {
+    my $info = $self->_display_info_x2go($user);
+
     my $ret = "["._timestamp()."]\n"
 ."speed=3
 pack=2m-jpeg
@@ -1219,13 +1248,13 @@ xinerama=false
 clipboard=both
 usekbd=true
 type=auto
-sshport=$port
+sshport=$info->{public_port}
 sound=true
 soundsystem=pulse
 startsoundsystem=true
 soundtunnel=true
 name=mint
-host=$ip
+host=$info->{ip}
 user=
 rootless=false
 published=false
@@ -1236,15 +1265,19 @@ usesshproxy=false
     return $ret;
 }
 
+sub _display_file_spice_tls($self, $user) {
+    return $self->_display_file_spice($user,1);
+}
+
 # taken from isard-vdi thanks to @tuxinthejungle Alberto Larraz
 sub _display_file_spice($self,$user, $tls = 0) {
 
     #    my ($ip,$port) = $self->display($user) =~ m{spice://(\d+\.\d+\.\d+\.\d+):(\d+)};
 
-    my $display = $self->display_info($user);
+    my $display = $self->display_info($user,'spice');
 
     confess "I can't find ip port in ".Dumper($display)
-        if !$display->{ip} || !$display->{port};
+        if !$display->{ip} || !exists $display->{port} || !$display->{port};
 
     my $ret =
         "[virt-viewer]\n"
@@ -1288,6 +1321,38 @@ Return information about the domain.
 
 =cut
 
+sub _screen_type($self, $info=undef) {
+    my $screen_type;
+    $info = $self->{_info} if !$info && exists $self->{_info};
+
+    my $screen;
+    if ( $info && exists $info->{hardware} && exists $info->{screen} ) {
+        $screen = $info->{hardware}->{screen}
+    } else {
+        $screen = [ $self->get_controller('screen') ];
+    }
+
+    for my $screen ( @{$screen} ) {
+        return $screen->{type};
+    }
+    $screen_type = $self->_default_screen_type if !$screen_type;
+    return $screen_type;
+
+}
+
+sub _store_info_display($self, $info, $user) {
+
+    my $screen_type = $self->_screen_type($info);
+
+    $self->display_file($user, $screen_type)
+        if !$self->readonly && !$self->_data('display_file');
+
+    my $display = $self->display_info($user, $screen_type);
+
+    $info->{display} = $display;
+
+}
+
 sub info($self, $user) {
     my $is_active = $self->is_active;
     my $info = {
@@ -1301,18 +1366,11 @@ sub info($self, $user) {
         ,has_clones => ( $self->has_clones or undef)
         ,needs_restart => ( $self->needs_restart or 0)
         ,type => $self->type
+        ,hardware => $self->get_controllers
     };
     if ($is_active) {
         eval {
-            $info->{display_url} = $self->display($user);
-            $self->display_file($user)  if !$self->_data('display_file');
-
-            my $display = $self->display_info($user);
-            $self->display_file_tls($user)
-                if exists $display->{tls_port}
-                    && $display->{tls_port}
-                    && !$self->_data('display_file');
-            $info->{display} = $display;
+            $self->_store_info_display($info, $user);
         };
         die $@ if $@ && $@ !~ /not allowed/i;
     }
@@ -1320,7 +1378,6 @@ sub info($self, $user) {
         my $base = Ravada::Front::Domain->open($self->id_base);
         $info->{description} = $base->description;
     }
-    $info->{hardware} = $self->get_controllers();
 
     my $internal_info = $self->get_info();
     for (keys(%$internal_info)) {
@@ -1333,6 +1390,8 @@ sub info($self, $user) {
     $info->{bases} = $self->_bases_vm();
     $info->{clones} = $self->_clones_vm();
     $info->{ports} = [$self->list_ports()];
+
+    $self->{_info} = $info;
     return $info;
 }
 
@@ -2130,6 +2189,9 @@ sub expose($self, @args) {
     } else {
         my %args = @args;
         $id_port = delete $args{id_port};
+
+        confess "Error: pass either port or internal_port, both are synonims."
+            if exists $args{port} && exists $args{internal_port};
         $internal_port = delete $args{port};
         $internal_port = delete $args{internal_port} if exists $args{internal_port};
         confess "Error: Missing port" if !defined $internal_port && !$id_port;
@@ -2156,10 +2218,11 @@ sub exposed_port($self, $search) {
         if ( $search =~ /^\d+$/ ) {
             return $port if $port->{internal_port} eq $search;
         } else {
-            return $port if $port->{name} eq $search;
+            return $port if $port->{name} && $port->{name} eq $search;
         }
     }
-    return;
+
+    die "Error: Exposed port $search not found\n";
 }
 
 sub _update_expose($self, %args) {
@@ -2188,7 +2251,7 @@ sub _update_expose($self, %args) {
             "SELECT internal_port,restricted FROM domain_ports where id=?");
         $sth->execute($id);
         my ($internal_port, $restricted) = $sth->fetchrow;
-        $self->_open_exposed_port($internal_port, $restricted);
+        $self->_open_exposed_port($internal_port);
     }
 }
 
@@ -2210,16 +2273,21 @@ sub _add_expose($self, $internal_port, $name, $restricted) {
     );
     $sth->finish;
 
-    $self->_open_exposed_port($internal_port, $restricted) if $self->is_active;
+    if ( $self->is_active ) {
+        Ravada::Request->open_exposed_ports(
+            uid => Ravada::Utils::user_daemon->id
+            ,id_domain => $self->id
+        );
+    }
     return $public_port;
 }
 
-sub _open_exposed_port($self, $internal_port, $restricted) {
-    my $sth = $$CONNECTOR->dbh->prepare("SELECT public_port FROM domain_ports"
+sub _open_exposed_port($self, $internal_port) {
+    my $sth = $$CONNECTOR->dbh->prepare("SELECT public_port, restricted FROM domain_ports"
         ." WHERE id_domain=? AND internal_port=?"
     );
     $sth->execute($self->id, $internal_port);
-    my ($public_port) = $sth->fetchrow();
+    my ($public_port, $restricted) = $sth->fetchrow();
     if (!$public_port) {
         $public_port = $self->_vm->_new_free_port();
         my $sth = $$CONNECTOR->dbh->prepare("UPDATE domain_ports set public_port=?"
@@ -2287,7 +2355,7 @@ sub open_exposed_ports($self) {
     }
 
     for my $expose ( @ports ) {
-        $self->_open_exposed_port($expose->{internal_port}, $expose->{restricted});
+        $self->_open_exposed_port($expose->{internal_port});
     }
 }
 
@@ -2376,6 +2444,13 @@ sub _close_exposed_port_nat($self, $iptables, %port) {
 
 sub remove_expose($self, $internal_port=undef) {
     $self->_close_exposed_port($internal_port);
+
+    if($internal_port) {
+        my @ports = $self->list_ports();
+        confess "Error: port $internal_port is not exposed\n".Dumper(\@ports)
+        if ! grep {$_->{internal_port} == $internal_port } @ports;
+    }
+
     my $query = "DELETE FROM domain_ports WHERE id_domain=?";
     $query .= " AND internal_port=?" if defined $internal_port;
 
@@ -2531,8 +2606,8 @@ sub _post_start {
     # get the display so it is stored for front access
     if ($self->is_active) {
         $self->display($arg{user});
-        $self->display_file($arg{user});
         $self->info($arg{user});
+        $self->display_file($arg{user});
         $self->open_exposed_ports();
     }
     Ravada::Request->enforce_limits(at => time + 60);

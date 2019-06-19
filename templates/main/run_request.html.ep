@@ -46,7 +46,7 @@
 
                 <li><b>Display URL :</b>
                     <a ng-click="copy_password(); redirect()"
-                        href="{{domain.display_url}}">{{domain.display_url}}</a></li>
+                        href="{{domain.display.display}}">{{domain.display.display}}</a></li>
                 </li>
                 <li><b>Display IP :</b> {{domain.display.ip}} </li>
                 <li><b>Display Port :</b> {{domain.display.port}} </li>

@@ -1084,17 +1084,32 @@ sub _upgrade_table {
     my $dbh = $CONNECTOR->dbh;
 
     my ($new_size) = $definition =~ m{\((\d+)};
+    my ($new_type) = $definition =~ m{^(\w+)};
 
     my $sth = $dbh->column_info(undef,undef,$table,$field);
     my $row = $sth->fetchrow_hashref;
     $sth->finish;
+
     if ( $dbh->{Driver}{Name} =~ /mysql/
-        && $row && $row->{COLUMN_SIZE}
-        && $new_size
-        && $new_size != $row->{COLUMN_SIZE}) {
+        && $row
+        && (
+                ( $row->{COLUMN_SIZE}
+                    && $new_size
+                    && $new_size != $row->{COLUMN_SIZE}
+                )
+                ||
+                ($new_type && $row->{TYPE_NAME} && $row->{TYPE_NAME} !~ /^$new_type$/i)
+            )
+        )
+        {
 
         $dbh->do("alter table $table change $field $field $definition");
-        warn "INFO: changing $field $row->{COLUMN_SIZE} to $new_size in $table\n"  if $0 !~ /\.t$/;
+        if ($0 !~ /\.t$/) {
+            warn "INFO: changing $field $row->{COLUMN_SIZE} to $new_size in $table\n"
+                if $new_size;
+            warn "INFO: changing $field $row->{TYPE_NAME} to $new_type in $table\n"
+                if $new_type && $row->{TYPE_NAME} ne $new_type;
+        }
         return;
     }
 
@@ -1198,7 +1213,7 @@ sub _upgrade_tables {
 
     $self->_upgrade_table('vms','vm_type',"char(20) NOT NULL DEFAULT 'KVM'");
     $self->_upgrade_table('vms','connection_args',"text DEFAULT NULL");
-    $self->_upgrade_table('vms','cached_active_time',"integer DEFAULT 0");
+    $self->_upgrade_table('vms','cached_active_time',"int DEFAULT 0");
     $self->_upgrade_table('vms','public_ip',"varchar(128) DEFAULT NULL");
     $self->_upgrade_table('vms','is_active',"int DEFAULT 0");
     $self->_upgrade_table('vms','enabled',"int DEFAULT 1");
@@ -1248,7 +1263,7 @@ sub _upgrade_tables {
     $self->_upgrade_table('domains','autostart','int NOT NULL DEFAULT 0');
 
     $self->_upgrade_table('domains','status','varchar(32) DEFAULT "shutdown"');
-    $self->_upgrade_table('domains','display','varchar(250) DEFAULT NULL');
+    $self->_upgrade_table('domains','display','TEXT DEFAULT NULL');
     $self->_upgrade_table('domains','display_file','text DEFAULT NULL');
     $self->_upgrade_table('domains','info','varchar(255) DEFAULT NULL');
     $self->_upgrade_table('domains','internal_id','varchar(64) DEFAULT NULL');

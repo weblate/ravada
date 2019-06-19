@@ -55,6 +55,7 @@ create_domain
     init_ldap_config
 
     create_storage_pool
+    wait_ip
 );
 
 our $DEFAULT_CONFIG = "t/etc/ravada.conf";
@@ -132,8 +133,11 @@ sub vm_names {
 }
 
 sub create_domain(@args) {
-    if (scalar @args == 1 ) {
-        @args = ( vm => $args[0] );
+    if ((scalar @args) % 2 == 1 ) {
+        my @args2 = ( vm => $args[0] );
+        push @args2,( user => $args[1] )     if $args[1];
+        push @args2,( id_iso => $args[2] )   if $args[2];
+        @args = @args2;
     } elsif ( scalar @args == 2 && $args[1] =~ /Auth::SQL/ ) {
         @args = ( vm => $args[0] , user => $args[1] );
     }
@@ -143,6 +147,7 @@ sub create_domain(@args) {
      my $id_iso = (delete $args{id_iso} or 'Alpine');
      my $screen = delete $args{screen};
      my $active = (delete $args{active} or 0);
+     my $memory = ( delete $args{memory} or 1024 * 256 );
     my $vm_name = delete $args{vm};
 
     confess "Error: unknown args ".Dumper(\%args) if keys %args;
@@ -176,12 +181,12 @@ sub create_domain(@args) {
                     , id_owner => $user->id
                     , %arg_create
                     , active => $active
-                    , memory => 256*1024
-                    , disk => 1 * 1024 * 1024
+                    , memory => $memory
+                    , disk => 1024 * 1024 * 1024
                     , screen => $screen
            );
     };
-    is('',''.$@);
+    is(''.$@,'');
 
     return $domain;
 
@@ -798,7 +803,7 @@ sub search_id_iso {
     );
     $sth->execute("$name%");
     my ($id) = $sth->fetchrow;
-    die "There is no iso called $name%" if !$id;
+    confess "There is no iso called $name%" if !$id;
     return $id;
 }
 
@@ -814,6 +819,7 @@ sub search_iptable_remote {
     my $to_dest = delete $args{'to-destination'};
 
     confess "Error: Unknown args ".Dumper(\%args) if keys %args;
+    confess "Error: node is not a VM" if ref($node) !~ /::VM::/i;
 
     my $iptables = $node->iptables_list();
 
@@ -1373,6 +1379,32 @@ sub create_storage_pool($vm) {
 
     return $pool_name;
 
+}
+
+sub wait_ip {
+    my $domain = shift  or confess "Missing domain arg";
+
+    return if $domain->_vm->type !~ /kvm|qemu/i;
+    return $domain->ip  if $domain->ip;
+
+    sleep 1;
+    eval ' $domain->domain->send_key(Sys::Virt::Domain::KEYCODE_SET_LINUX,200, [28]) ';
+    die $@ if $@;
+
+    return if $@;
+    sleep 2;
+    for ( 1 .. 12 ) {
+        rvd_back->_process_requests_dont_fork();
+        eval ' $domain->domain->send_key(Sys::Virt::Domain::KEYCODE_SET_LINUX,200, [28]) ';
+        die $@ if $@;
+        sleep 2;
+    }
+    for (1 .. 30) {
+        last if $domain->ip;
+        sleep 1;
+        diag("waiting for ".$domain->name." ip") if $_ ==10;
+    }
+    return $domain->ip;
 }
 
 1;
