@@ -1,8 +1,11 @@
 package Ravada::Front::Domain::KVM;
 
+use Data::Dumper;
+use Hash::Util qw(lock_hash unlock_hash);
 use Moose;
-
 use XML::LibXML;
+
+use Ravada::Utils;
 
 extends 'Ravada::Front::Domain';
 
@@ -12,6 +15,7 @@ use feature qw(signatures);
 our %GET_CONTROLLER_SUB = (
     usb => \&_get_controller_usb
     ,disk => \&_get_controller_disk
+     ,screen => \&_get_controller_screen
     ,network => \&_get_controller_network
     );
 
@@ -89,6 +93,65 @@ sub _get_controller_network($self) {
         });
     }
 
+    return @ret;
+}
+
+sub _get_controller_screen($self) {
+    return ( $self->_get_controller_screen_spice
+            ,$self->_get_controller_screen_x2go
+        );
+}
+
+sub _get_controller_screen_x2go($self) {
+    my $port;
+
+    eval { $port = $self->exposed_port('x2go') };
+    return if $@ && $@ =~ /Exposed.*not found/i;
+    die $@ if $@;
+
+    return if !$port;
+    my $info = $self->display_info(Ravada::Utils::user_daemon, 'x2go');
+    unlock_hash(%$info);
+
+    delete $info->{restricted};
+    delete $info->{id_domain};
+    delete $info->{id};
+
+    $info->{type} = 'x2go';
+    lock_hash(%$info);
+
+    return ($info);
+}
+
+sub _get_controller_screen_spice($self) {
+    my $xml;
+    if (! $self->readonly ) {
+        $xml = $self->xml_description;
+    } else {
+        $xml = $self->_data_extra('xml');
+    }
+    my $doc = XML::LibXML->load_xml(string => $xml);
+
+    my @ret;
+
+    my $count = 0;
+    for my $graph ($doc->findnodes('/domain/devices/graphics')) {
+
+        my ($type) = $graph->getAttribute('type');
+        my ($address) = $graph->getAttribute('listen');
+        my $port = $graph->getAttribute('port');
+        my $tls_port = $graph->getAttribute('tlsPort');
+
+        my $display = {
+            type => $type
+            ,port => $port
+            ,tls_port => $tls_port
+            ,ip => $address
+            ,display => ''
+        };
+        $display->{display} = $type."://$address:$port" if $port;
+        push @ret,($display);
+    }
     return @ret;
 }
 
@@ -218,4 +281,7 @@ sub _get_driver_disk {
     my @volumes = $self->list_volumes_info();
     return $volumes[0]->{driver};
 }
+
+sub _default_screen_type { 'spice' }
+
 1;

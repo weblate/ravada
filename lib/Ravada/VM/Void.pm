@@ -81,9 +81,13 @@ sub create_domain {
     my $volatile = delete $args{volatile};
     my $active = ( delete $args{active} or $volatile or $user->is_temporary or 0);
     my $listen_ip = delete $args{listen_ip};
-    confess if $args{name} eq 'tst_vm_v20_volatile_clones_02' && !$listen_ip;
+    my $screen = ( delete $args{screen} or 'void');
+
+    my $screen_list = $self->_check_screen_type($screen, qw(void spice x2go));
+
     my $domain = Ravada::Domain::Void->new(
                                            %args
+                                           , screen => $screen_list
                                            , domain => $args{name}
                                            , _vm => $self
     );
@@ -91,7 +95,8 @@ sub create_domain {
          "-e ".$domain->_config_file." && echo 1" );
     chomp $out;
     die "Error: Domain $args{name} already exists " if $out;
-    $domain->_set_default_info($listen_ip);
+    $domain->_set_default_info($listen_ip, $screen);
+
     $domain->_store( autostart => 0 );
     $domain->_store( is_active => $active );
     $domain->set_memory($args{memory}) if $args{memory};
@@ -324,7 +329,7 @@ sub free_memory {
 }
 
 sub _fetch_dir_cert {
-    confess "TODO";
+    return '';
 }
 
 sub free_disk($self, $storage_pool = undef) {

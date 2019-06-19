@@ -503,6 +503,9 @@ sub _new_request {
                 if exists $args{args}->{after_request};
 
         }
+        confess "Error: wrong uid ".Dumper($args{args}->{uid})
+            if exists $args{args}->{uid}
+            && ( ref($args{args}->{uid}) && $args{args}->{uid} !~ /^\d+$/ );
         $args{args} = encode_json($args{args});
     }
     _init_connector()   if !$CONNECTOR || !$$CONNECTOR;

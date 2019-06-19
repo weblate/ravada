@@ -184,6 +184,7 @@ sub test_add_hardware_custom($domain, $hardware) {
         disk => \&test_add_disk
         ,usb => sub {}
         ,mock => sub {}
+         ,screen => sub {}
         ,network => sub {}
     );
 
@@ -243,7 +244,7 @@ sub test_remove_almost_all_hardware {
 
     #TODO test remove hardware out of bounds
     my $total_hardware = scalar($domain->get_controller($hardware));
-    return if $total_hardware < 2;
+    return if !$total_hardware || $total_hardware < 2;
     for my $index ( reverse 1 .. $total_hardware-1) {
         test_remove_hardware($vm, $domain, $hardware, $index);
         $domain->list_volumes();
@@ -455,9 +456,13 @@ sub test_change_network($vm, $domain) {
     test_change_network_nat($vm, $domain, $index);
 }
 
+sub test_change_screen($vm,$domain) {
+}
+
 sub test_change_hardware($vm, $domain, $hardware) {
     my %sub = (
-      network => \&test_change_network
+      network => sub {}
+      ,screen => \&test_change_screen
         ,disk => \&test_change_disk
         ,mock => sub {}
          ,usb => sub {}
@@ -587,9 +592,9 @@ for my $vm_name ( qw(KVM Void)) {
         test_change_hardware($vm, $domain_b, $hardware);
         test_remove_hardware($vm, $domain_b, $hardware, 0);
 
-        test_change_drivers($domain_b, $hardware)   if $hardware !~ /^(usb|mock)$/;
+        test_change_drivers($domain_b, $hardware)   if $hardware !~ /^(usb|mock|screen)$/;
         test_add_hardware_request_drivers($vm, $domain_b, $hardware);
-        test_all_drivers($domain_b, $hardware)   if $hardware !~ /^(usb|mock)$/;
+        test_all_drivers($domain_b, $hardware)   if $hardware !~ /^(usb|mock|screen)$/;
 
         # try to add with the machine started
         $domain_b->start(user_admin) if !$domain_b->is_active;

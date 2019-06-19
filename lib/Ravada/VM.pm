@@ -232,6 +232,15 @@ sub BUILD {
 
 }
 
+sub _check_screen_type($self, $screen, @valid) {
+    $screen = [$screen] if !ref($screen);
+    for my $screen0 (@$screen) {
+        confess "Error: Unknown graphics device '$screen'"
+            if !grep/^$screen0/,@valid;
+    }
+    return map { lc($_) => 1 } @$screen;
+}
+
 sub _open_type {
     my $self = shift;
     my %args = @_;
@@ -403,7 +412,7 @@ sub _around_create_domain {
     $args_create{spice_password} = $self->_define_spice_password($remote_ip);
     $self->_pre_create_domain(%args_create);
 
-    my $domain = $self->$orig(%args_create, volatile => $volatile);
+    my $domain = $self->$orig(%args_create, volatile => $volatile, active => $active);
     $domain->add_volume_swap( size => $swap )   if $swap;
 
     if ($id_base) {
@@ -428,7 +437,7 @@ sub _around_create_domain {
     };
     die $@ if $@ && $@ !~ /code: 55,/;
 
-    $domain->expose(22,'x2go') if grep /^x2go$/i,@$screen;
+    $domain->expose(port => 22,name => 'x2go') if grep /^x2go$/i,@$screen;
     $domain->info($owner);
     $domain->display($owner)    if $domain->is_active;
 
@@ -626,7 +635,9 @@ sub _check_memory {
     my %args = @_;
     return if !exists $args{memory};
 
-    die "ERROR: Low memory '$args{memory}' required ".int($MIN_MEMORY_MB/1024)." MB " if $args{memory} < $MIN_MEMORY_MB;
+    my $memory = Ravada::Utils::size_to_number($args{memory});
+    die "ERROR: Low memory '$args{memory}' ($memory) required ".int($MIN_MEMORY_MB/1024)." MB "
+        if $memory < $MIN_MEMORY_MB;
 }
 
 sub _check_disk {
@@ -1213,6 +1224,8 @@ sub file_exists( $self, $file ) {
 
 sub remove_file( $self, $file ) {
     unlink $file if $self->is_local;
+
+    return if !$self->file_exists($file);
     return $self->run_command("/bin/rm", $file);
 }
 

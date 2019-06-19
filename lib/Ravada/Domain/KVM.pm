@@ -65,16 +65,19 @@ our %SET_DRIVER_SUB = (
 our %GET_CONTROLLER_SUB = (
     usb => \&_get_controller_usb
     ,disk => \&_get_controller_disk
+    ,screen => \&_get_controller_screen
     ,network => \&_get_controller_network
     );
 our %SET_CONTROLLER_SUB = (
     usb => \&_set_controller_usb
     ,disk => \&_set_controller_disk
+    ,screen => \&_set_controller_screen
     ,network => \&_set_controller_network
     );
 our %REMOVE_CONTROLLER_SUB = (
     usb => \&_remove_controller_usb
     ,disk => \&_remove_controller_disk
+    ,screen => \&_remove_controller_screen
     ,network => \&_remove_controller_network
     );
 
@@ -608,7 +611,17 @@ Returns the display information as a hashref. The display URI is in the display 
 
 =cut
 
-sub display_info($self, $user) {
+
+sub display_info($self, $user, $type='spice') {
+    if (!$type || $type eq 'spice' ) {
+        return $self->_display_info_spice($user);
+    } elsif ($type eq 'x2go') {
+        return $self->_display_info_x2go($user);
+    }
+    confess "Error: Unknown display info type '$type'";
+}
+
+sub _display_info_spice($self, $user) {
 
     my $xml = XML::LibXML->load_xml(string => $self->xml_description);
     my ($graph) = $xml->findnodes('/domain/devices/graphics')
@@ -1955,10 +1968,31 @@ sub _set_controller_network($self, $number, $data) {
       $self->domain->attach_device($device, Sys::Virt::Domain::DEVICE_MODIFY_CONFIG);
 }
 
+sub _set_controller_screen($self, $number, $data) {
+    my $type = (delete $data->{type} or 'spice');
+    return $self->_set_controller_screen_spice() if $type eq 'spice';
+
+    confess "I cant add a new screen controller type '$type'";
+}
+
+sub _set_controller_screen_spice($self) {
+    my $doc = XML::LibXML->load_xml(string => $self->xml_description_inactive);
+    my ($devices) = $doc->findnodes('/domain/devices');
+
+    my $controller = $devices->addNewChild(undef,"graphics");
+    $controller->setAttribute(type => 'spice');
+    $controller->setAttribute(autoport => 'yes');
+    $controller->setAttribute(listen => $self->_vm->ip);
+
+    $self->_vm->connect if !$self->_vm->vm;
+    my $new_domain = $self->_vm->vm->define_domain($doc->toString);
+    $self->domain($new_domain);
+}
+
 sub remove_controller($self, $name, $index=0) {
     my $sub = $REMOVE_CONTROLLER_SUB{$name};
     
-    die "I can't get controller $name for domain ".$self->name
+    die "I can't get remove controller $name for domain ".$self->name
         ." ".$self->type
         ."\n".Dumper(\%REMOVE_CONTROLLER_SUB)
         if !$sub;
@@ -2014,6 +2048,10 @@ sub _remove_controller_disk($self, $index) {
 
 sub _remove_controller_network($self, $index) {
     $self->_remove_device($index,'interface', type => qr'(bridge|network)');
+}
+
+sub _remove_controller_screen($self, $index) {
+    $self->_remove_device($index,'graphics');
 }
 
 =head2 pre_remove

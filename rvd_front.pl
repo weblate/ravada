@@ -721,7 +721,7 @@ get '/machine/display-tls/(:id)-tls.vv' => sub {
         $c->res->headers->content_disposition(
         "inline;filename=".$domain->id."-tls.vv");
 
-    return $c->render(data => $domain->display_file_tls($USER), format => 'vv');
+    return $c->render(data => $domain->display_file($USER,'spice-tls'), format => 'vv');
 };
 
 # Network ##########################################################3

@@ -5,11 +5,15 @@ use YAML qw(LoadFile);
 
 extends 'Ravada::Front::Domain';
 
+no warnings "experimental::signatures";
+use feature qw(signatures);
+
 my $DIR_TMP = "/var/tmp/rvd_void/".getpwuid($>);
 
 our %GET_CONTROLLER_SUB = (
     'mock' => \&_get_controller_mock
     ,'disk' => \&_get_controller_disk
+    ,screen => \&_get_controller_screen
 
 );
 
@@ -59,11 +63,14 @@ sub get_controller_by_name {
     return $GET_CONTROLLER_SUB{$name};
 }
 
-sub _get_controller_mock {
-    my $self = shift;
+sub _get_controller_mock($self, $name='mock') {
     my $hardware = $self->_value('hardware');
-    return if !exists $hardware->{mock};
-    return @{$hardware->{mock}};
+    return if !exists $hardware->{$name};
+    return @{$hardware->{$name}};
+}
+
+sub _get_controller_screen($self) {
+    return $self->_get_controller_mock('screen');
 }
 
 sub _get_controller_disk {
@@ -71,4 +78,5 @@ sub _get_controller_disk {
     return $self->list_volumes_info;
 }
 
+sub _default_screen_type { 'void' }
 1;

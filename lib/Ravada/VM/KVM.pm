@@ -499,7 +499,7 @@ Creates a domain and removes the CPU defined in the XML template:
 sub create_domain {
     my $self = shift;
     my %args = @_;
-    $args{active} = 1 if !defined $args{active};
+    $args{screen} = 'spice' if !defined $args{screen};
 
     croak "argument name required"       if !$args{name};
     croak "argument id_owner required"   if !$args{id_owner};
@@ -508,9 +508,9 @@ sub create_domain {
 
     my $domain;
     if ($args{id_iso}) {
-        $domain = $self->_domain_create_from_iso(@_);
+        $domain = $self->_domain_create_from_iso(%args);
     } elsif($args{id_base}) {
-        $domain = $self->_domain_create_from_base(@_);
+        $domain = $self->_domain_create_from_base(%args);
     } else {
         confess "TODO";
     }
@@ -819,11 +819,7 @@ sub _domain_create_common {
     my %screen;
     {
         my $screen = (delete $args{screen} or 'spice');
-        $screen = [$screen] if !ref($screen);
-        for my $screen0 (@$screen) {
-            confess "Error: Unknown graphics device '$screen'" if $screen0 !~ /^(spice|x2go)$/;
-        }
-        %screen = map { lc($_) => 1 } @$screen;
+        %screen = $self->_check_screen_type($screen,qw(x2go spice));
     }
 
     if ($screen{'spice'}) {
@@ -980,6 +976,9 @@ sub _domain_create_from_base {
 
     confess "argument id_base or base required ".Dumper(\%args)
         if !$args{id_base} && !$args{base};
+
+    confess "argument screen required ".Dumper(\%args)
+        if !exists $args{screen} || !$args{screen};
 
     die "Domain $args{name} already exists"
         if $self->search_domain($args{name});

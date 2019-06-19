@@ -78,12 +78,23 @@ sub display($self, $user) {
     return $info->{display};
 }
 
-sub display_info($self, $user) {
-    return decode_json($self->_data('display'));
+sub display_info($self, $user, $type) {
+    my $info = decode_json($self->_data('display'));
+    confess "Error: Unknown info type '$type' ".Dumper($info)
+        if !exists $info->{$type};
+    return $info->{$type};
 }
 
 sub display_file_tls($self, $user) {
-    return $self->_data('display_file');
+    return $self->display_file($user, 'spice-tls');
+}
+
+sub display_file($self,$user, $screen=$self->_screen_type) {
+    my $file_json = $self->_data('display_file');
+    confess if !$file_json;
+    return '' if !$file_json;
+    my $file = decode_json($file_json);
+    return $file->{$screen};
 }
 
 sub force_shutdown      { confess "TODO" }
@@ -185,4 +196,16 @@ sub list_controllers {}
 sub set_controller {}
 sub remove_controller {}
 sub change_hardware { die "TODO" }
+
+sub _display_file_sub_local($self, $screen) {
+    my %sub = (
+        void => \&_display_file_void
+    );
+    return ($sub{$screen} or undef);
+}
+
+sub _display_file_void($self, $user) {
+    return "port=mock\n";
+}
+
 1;
