@@ -241,6 +241,15 @@ sub _check_screen_type($self, $screen, @valid) {
     return map { lc($_) => 1 } @$screen;
 }
 
+sub _check_screen_type($self, $screen, @valid) {
+    $screen = [$screen] if !ref($screen);
+    for my $screen0 (@$screen) {
+        confess "Error: Unknown graphics device '$screen'"
+            if !grep/^$screen0/,@valid;
+    }
+    return map { lc($_) => 1 } @$screen;
+}
+
 sub _open_type {
     my $self = shift;
     my %args = @_;

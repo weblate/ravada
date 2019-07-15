@@ -136,7 +136,7 @@ sub test_x2go_spice($vm) {
     }
 
     my @screen = $domain->get_controller('screen');
-    is(scalar@screen,2, $domain->name) or exit;
+    is(scalar@screen,2);
 
     my $display_spice = $domain->display_file(user_admin,'spice');
     ok($display_spice);
@@ -144,7 +144,7 @@ sub test_x2go_spice($vm) {
     my $display_x2go = $domain->display_file(user_admin,'x2go');
     ok($display_x2go);
 
-    like($domain->display(user_admin),qr(^spice://), $domain->name) or exit;
+    like($domain->display(user_admin),qr(^spice://));
 
     $domain->start(user_admin);
     rvd_back->_process_requests_dont_fork(1);
@@ -183,6 +183,7 @@ sub test_drivers($vm) {
     ok(scalar(@{$info->{drivers}->{screen}}), $vm->type) or die Dumper($info->{drivers});
 
 }
+
 ########################################################################
 
 for my $vm_name ( vm_names() ) {

@@ -469,7 +469,6 @@ sub test_change_screen($vm,$domain) {
 
     my $hardware = 'screen';
 
-
 }
 
 sub test_change_hardware($vm, $domain, $hardware) {

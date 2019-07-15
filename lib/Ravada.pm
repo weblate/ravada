@@ -1200,6 +1200,12 @@ sub _upgrade_table {
                 if $new_type && $row->{TYPE_NAME} ne $new_type;
         }
         $dbh->do("alter table $table change $field $field $definition");
+        if ($0 !~ /\.t$/) {
+            warn "INFO: changing $field $row->{COLUMN_SIZE} to $new_size in $table\n"
+                if $new_size;
+            warn "INFO: changing $field $row->{TYPE_NAME} to $new_type in $table\n"
+                if $new_type && $row->{TYPE_NAME} ne $new_type;
+        }
         return;
     }
 

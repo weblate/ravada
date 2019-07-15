@@ -715,7 +715,6 @@ sub _search_rules($domain, $remote_ip, $internal_port, $public_port) {
 }
 
 sub _wait_requests($domain) {
-    _wait_ip($domain->_vm->type, $domain);
     for ( 1 .. 120 ) {
         rvd_back->_process_requests_dont_fork(1);
         last if !$domain->list_requests(1);
