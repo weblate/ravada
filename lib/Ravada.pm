@@ -814,18 +814,75 @@ sub _update_domain_drivers_options_disk($self) {
     $self->_update_table('domain_drivers_options','id',\%data);
 }
 
+sub _update_domain_drivers_options_screen($self) {
+
+    my @options_all = ('spice','x2go');
+    my %options = (
+        void =>['void', @options_all]
+        ,KVM =>\@options_all
+    );
+
+    for my $type (keys %options) {
+        my $id =$self->_search_driver_type($type, 'screen');
+
+        my %data = map {
+            $type.$_ => {
+                id_driver_type => $id
+                ,name => $_
+                ,value => $_
+            }
+        } @{$options{$type}};
+
+        $self->_update_table('domain_drivers_options',['id_driver_type','name'],\%data);
+    }
+}
+
+sub _search_driver_type($self, $vm_type, $name) {
+
+    for ( 1 .. 2 ) {
+        my $sth = $CONNECTOR->dbh->prepare("SELECT id FROM domain_drivers_types "
+            ." WHERE vm=? AND name=?"
+        );
+        $sth->execute( $vm_type, $name);
+        my ($id) = $sth->fetchrow;
+        return $id if $id;
+
+        $self->_insert_driver_type($vm_type, $name);
+    }
+    confess "Error: I cant set driver type ($vm_type, $name)";
+}
+
+sub _insert_driver_type($self,$vm_type,$name) {
+    my $sth = $CONNECTOR->dbh->prepare("INSERT INTO domain_drivers_types "
+        ."(vm, name) "
+        ." VALUES(?,?)"
+    );
+    $sth->execute($vm_type, $name);
+    $sth->finish;
+}
+
 sub _update_table($self, $table, $field, $data, $verbose=0) {
 
-    my $sth_search = $CONNECTOR->dbh->prepare("SELECT id FROM $table WHERE $field = ?");
+    $field = [$field] if !ref($field);
+    my $query = "SELECT id FROM $table WHERE "
+            .join(" AND ",map { "$_=?" } @$field);
+
+    my $sth_search = $CONNECTOR->dbh->prepare($query);
     for my $name (sort keys %$data) {
         my $row = $data->{$name};
-        $sth_search->execute($row->{$field});
+
+        my @values = map { $row->{$_} } @$field;
+
+        confess "Undefined field ".Dumper($field)."\n".Dumper($row)
+            if grep {!defined $_  } @values;
+
+        $sth_search->execute(@values);
         my ($id) = $sth_search->fetchrow;
         if ( $id ) {
             warn("INFO: $table : $row->{$field} already added.\n") if $verbose;
             next;
         }
-        warn("INFO: updating $table : $row->{$field}\n")    if $0 !~ /\.t$/;
+        warn("INFO: updating $table : ".join(",",@$field)." = ".join(",",@values)."\n")    if $0 !~ /\.t$/;
 
         my $sql =
             "INSERT INTO $table "
@@ -878,6 +935,7 @@ sub _update_data {
     $self->_update_domain_drivers_types();
     $self->_update_domain_drivers_options();
     $self->_update_domain_drivers_options_disk();
+    $self->_update_domain_drivers_options_screen();
     $self->_update_old_qemus();
 
     $self->_add_indexes();
