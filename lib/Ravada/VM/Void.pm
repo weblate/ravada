@@ -143,7 +143,6 @@ sub create_domain {
                         , target => 'hdc'
         );
         $domain->_set_default_drivers();
-        $domain->_set_default_info($listen_ip);
         $domain->_store( is_active => 0 );
 
         $domain->_store( is_active => 1 ) if $volatile || $user->is_temporary;

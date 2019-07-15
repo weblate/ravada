@@ -41,35 +41,28 @@ sub name {
     return $self->domain;
 };
 
-sub display_info($self, $user=undef, $type=undef) {
+sub display_info($self, $user=undef, $type='void') {
 
     my $hardware = $self->_value('hardware');
     my $screen = $hardware->{screen};
 
-    my ($found_screen) = @$screen;
-
-    if (!$type) {
-        $type = $found_screen->{type};
-    }
+    my ($found_screen) = grep { $_->{type} eq $type} @$screen;
 
     confess "Error: I can't find graphics for screen ".($type or '<ANY>')." in ".$self->name
         ."\n".Dumper($screen) if !$found_screen;
 
     my $display_data = $self->_value('display');
-    if (!keys %$display_data) {
-        $display_data = $self->_set_display(undef, $type);
-    }
     return $display_data;
 }
 
-sub _set_display($self, $listen_ip=$self->_vm->listen_ip, $type=$self->_screen_type) {
-    confess "Error: undefined type" if !defined $type;
-    $listen_ip=$self->_vm->listen_ip if !$listen_ip;
-    #    my $ip = ($self->_vm->nat_ip or $self->_vm->ip());
-    my $display="void://$listen_ip:5990/";
-    my $display_data = { display => $display , type => 'void', ip => $listen_ip, port => 5990 };
-    $self->_store( display => $display_data );
-    return $display_data;
+sub _set_display($self, %args){
+
+    my $listen_ip= (delete $args{listen_ip} or $self->_vm->listen_ip);
+    my $type= ( delete $args{type} or $self->_screen_type);
+
+    confess "Error: unknown args ".Dumper(\%args) if keys %args;
+    confess "Error: wrong ip '$listen_ip'"
+        if defined $listen_ip && $listen_ip !~ m{^\d[0-9\.]+$};
 
     for my $screen ( $self->get_controller('screen') ) {
         next if $screen->{type} ne $type;
@@ -77,7 +70,7 @@ sub _set_display($self, $listen_ip=$self->_vm->listen_ip, $type=$self->_screen_t
         $self->_store(display => $screen);
         return $screen;
     }
-    die "Error: I can't find graphics type '$type' ".Dumper([$self->get_controller('screen')]);
+    confess "Error: I can't find graphics type '$type' ".Dumper([$self->get_controller('screen')]);
 }
 
 sub is_active {
@@ -246,7 +239,7 @@ sub start($self, @args) {
     $listen_ip = $self->_vm->listen_ip($remote_ip) if !$listen_ip;
 
     $self->_store(is_active => 1);
-    $self->_set_display( $listen_ip );
+    $self->_set_display( listen_ip => $listen_ip );
 }
 
 sub prepare_base {
@@ -510,7 +503,7 @@ sub get_info {
     return $info;
 }
 
-sub _set_default_info($self, $screen='void', $listen_ip=undef) {
+sub _set_default_info($self, $listen_ip=undef, $screen='void') {
     my $info = {
             max_mem => 512*1024
             ,memory => 512*1024,
@@ -520,7 +513,6 @@ sub _set_default_info($self, $screen='void', $listen_ip=undef) {
             ,ip =>'1.1.1.'.int(rand(254)+1)
     };
     $self->_store(info => $info);
-    $self->_set_display($listen_ip);
     my %controllers = $self->list_controllers;
     for my $name ( sort keys %controllers) {
         next if $name eq 'disk' || $name eq 'screen';
@@ -528,6 +520,7 @@ sub _set_default_info($self, $screen='void', $listen_ip=undef) {
     }
     $screen = [ $screen ] if !ref($screen);
     my $port = $PORT;
+    confess if $self->name eq 'tst_kvm_d30_display_04' && scalar(@$screen) == 1;
     for my $n ( 0 .. scalar(@$screen)-1) {
         my $type = $screen->[$n];
         my $data = {
@@ -542,6 +535,7 @@ sub _set_default_info($self, $screen='void', $listen_ip=undef) {
         $port++;
         $self->set_controller('screen',$n+1, $data);
     }
+    $self->_set_display( listen_ip => $listen_ip, type => $screen->[0]);
     return $info;
 }
 

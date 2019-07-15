@@ -1977,16 +1977,24 @@ sub _set_controller_screen($self, $number, $data) {
 
 sub _set_controller_screen_spice($self) {
     my $doc = XML::LibXML->load_xml(string => $self->xml_description_inactive);
+
+    my $listen_ip = $self->_vm->listen_ip;
+    my ($spice) = $doc->findnodes('/domain/devices/graphics');
+    confess "I can't add more than 1 spice graphics"
+        if $spice && $spice->getAttribute('type') =~ /spice/i;
+
     my ($devices) = $doc->findnodes('/domain/devices');
 
     my $controller = $devices->addNewChild(undef,"graphics");
     $controller->setAttribute(type => 'spice');
     $controller->setAttribute(autoport => 'yes');
-    $controller->setAttribute(listen => $self->_vm->ip);
+    $controller->setAttribute(listen => $listen_ip);
 
-    $self->_vm->connect if !$self->_vm->vm;
-    my $new_domain = $self->_vm->vm->define_domain($doc->toString);
-    $self->domain($new_domain);
+    my $listen = $controller->addNewChild(undef,"listen");
+    $listen->setAttribute(type => 'address');
+    $listen->setAttribute(address => $listen_ip);
+
+    $self->_post_change_hardware($doc);
 }
 
 sub remove_controller($self, $name, $index=0) {

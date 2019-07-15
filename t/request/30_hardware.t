@@ -68,9 +68,13 @@ sub test_add_hardware_request_drivers {
 sub test_add_hardware_request($vm, $domain, $hardware, $data={}) {
 
     confess if !ref($data) || ref($data) ne 'HASH';
+
+    $domain->shutdown_now(user_admin) if $domain->is_active;
+
     my @list_hardware1 = $domain->get_controller($hardware);
 	my $numero = scalar(@list_hardware1)+1;
-    while ($hardware eq 'usb' && $numero > 4) {
+    while (($hardware eq 'usb' && $numero > 4 )
+            || ( $hardware eq 'screen' && $numero > 1 ) ) {
         test_remove_hardware($vm, $domain, $hardware, 0);
         @list_hardware1 = $domain->get_controller($hardware);
 	    $numero = scalar(@list_hardware1)+1;
@@ -87,7 +91,7 @@ sub test_add_hardware_request($vm, $domain, $hardware, $data={}) {
 	is($@,'') or return;
     $USER->unread_messages();
 	ok($req, 'Request');
-	rvd_back->_process_all_requests_dont_fork();
+	rvd_back->_process_all_requests_dont_fork(1);
     is($req->status(),'done');
     is($req->error(),'') or exit;
 
@@ -108,7 +112,7 @@ sub test_add_hardware_request($vm, $domain, $hardware, $data={}) {
                 .Dumper(\@list_hardware2, \@list_hardware1)) or exit;
     }
     my $info = $domain->info(user_admin);
-    is(scalar(@{$info->{hardware}->{$hardware}}), $numero) or exit;
+    is(scalar(@{$info->{hardware}->{$hardware}}), $numero, "screen ".$domain->name) or exit;
 }
 
 sub test_add_cdrom($domain) {
@@ -145,6 +149,9 @@ sub test_add_cdrom($domain) {
         }
     }
 
+}
+
+sub test_add_screen($domain) {
 }
 
 sub test_cdrom_kvm($domain) {
@@ -184,7 +191,7 @@ sub test_add_hardware_custom($domain, $hardware) {
         disk => \&test_add_disk
         ,usb => sub {}
         ,mock => sub {}
-         ,screen => sub {}
+         ,screen => \&test_add_screen
         ,network => sub {}
     );
 
@@ -457,6 +464,12 @@ sub test_change_network($vm, $domain) {
 }
 
 sub test_change_screen($vm,$domain) {
+    my $domain_f = Ravada::Front::Domain->open($domain->id);
+    my $info = $domain_f->info(user_admin);
+
+    my $hardware = 'screen';
+
+
 }
 
 sub test_change_hardware($vm, $domain, $hardware) {
@@ -596,6 +609,8 @@ for my $vm_name ( qw(KVM Void)) {
         test_add_hardware_request_drivers($vm, $domain_b, $hardware);
         test_all_drivers($domain_b, $hardware)   if $hardware !~ /^(usb|mock|screen)$/;
 
+        # we need at least one screen
+        test_add_hardware_request($vm, $domain_b, $hardware) if $hardware eq 'screen';
         # try to add with the machine started
         $domain_b->start(user_admin) if !$domain_b->is_active;
         ok($domain_b->is_active) or next;

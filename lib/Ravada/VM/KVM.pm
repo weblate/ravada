@@ -1561,26 +1561,6 @@ sub _xml_remove_spice($self, $doc){
     }
 }
 
-sub _xml_remove_spice($self, $doc){
-    for my $devices ($doc->findnodes('/domain/devices')) {
-        for my $graph ( $devices->findnodes('graphics')) {
-            if ($graph->getAttribute('type') =~ /^spice$/i) {
-                $devices->removeChild($graph);
-            }
-        }
-    }
-}
-
-sub _xml_remove_spice($self, $doc){
-    for my $devices ($doc->findnodes('/domain/devices')) {
-        for my $graph ( $devices->findnodes('graphics')) {
-            if ($graph->getAttribute('type') =~ /^spice$/i) {
-                $devices->removeChild($graph);
-            }
-        }
-    }
-}
-
 sub _xml_modify_uuid {
     my $self = shift;
     my $doc = shift;

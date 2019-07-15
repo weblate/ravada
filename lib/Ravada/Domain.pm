@@ -1384,7 +1384,7 @@ sub info($self, $user) {
         die "Field $_ already in info" if exists $info->{$_};
         $info->{$_} = $internal_info->{$_};
     }
-    for (qw(disk network)) {
+    for (qw(disk network screen)) {
         $info->{drivers}->{$_} = $self->drivers($_,undef,1);
     }
     $info->{bases} = $self->_bases_vm();
