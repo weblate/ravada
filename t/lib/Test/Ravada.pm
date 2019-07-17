@@ -817,6 +817,8 @@ sub search_iptable_remote {
     my $table = (delete $args{table} or 'filter');
     my $chain = (delete $args{chain} or $CHAIN);
     my $to_dest = delete $args{'to-destination'};
+    my $match = delete $args{match};
+    my $state = delete $args{state};
 
     confess "Error: Unknown args ".Dumper(\%args) if keys %args;
     confess "Error: node is not a VM" if ref($node) !~ /::VM::/i;
@@ -832,6 +834,8 @@ sub search_iptable_remote {
     for my $line (@{$iptables->{$table}}) {
         my %args = @$line;
         next if $args{A} ne $chain;
+
+        warn Dumper(\%args) if $chain eq 'FORWARD' && $args{d} && $args{d} =~ /^192/;
         $count++;
 
         if(
@@ -840,9 +844,10 @@ sub search_iptable_remote {
            && (!defined $local_ip  || exists $args{d} && $args{d} eq $local_ip )
            && (!defined $local_port|| exists $args{dport} && $args{dport} eq $local_port)
            && (!defined $to_dest   || exists $args{'to-destination'}
+           && (!defined $match     || exists $args{m} && $args{m} eq $match )
+           && (!defined $state     || exists $args{state} && $args{state} eq $state)
                 && $args{'to-destination'} eq $to_dest)
         ){
-
             push @found,($count);
         }
     }
@@ -855,6 +860,9 @@ sub flush_rules_node($node) {
     $node->create_iptables_chain($CHAIN);
     $node->run_command("/sbin/iptables","-F", $CHAIN);
     $node->run_command("/sbin/iptables","-X", $CHAIN);
+
+    # flush forward too. this is only supposed to run on test servers
+    $node->run_command("/sbin/iptables","-F", 'FORWARD');
 }
 
 sub flush_rules {

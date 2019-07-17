@@ -49,6 +49,8 @@ sub test_add_hardware_request_drivers {
 
     my $options = $info0->{drivers}->{$hardware};
 
+    my $count = scalar @{$info0->{hardware}->{$hardware}};
+
     for my $driver (@$options) {
         diag("Testing new $hardware $driver");
 
@@ -57,6 +59,12 @@ sub test_add_hardware_request_drivers {
         test_add_hardware_request($vm, $domain, $hardware, { driver => $driver} );
 
         $info = $domain->info(user_admin);
+
+        is(scalar @{$info->{hardware}->{$hardware}}, $count+1, "Expecting added $hardware"
+        ) or die Dumper($info->{hardware}->{$hardware});
+        ok(exists $info->{hardware}->{$hardware}->[-1]->{driver}
+                ,$vm->type." ".$domain->name)
+            or die Dumper($info->{hardware}->{$hardware}->[-1]);
 
         is($info->{hardware}->{$hardware}->[-1]->{driver}, $driver) or confess( $domain->name
             , Dumper($info->{hardware}->{$hardware}));
@@ -91,7 +99,7 @@ sub test_add_hardware_request($vm, $domain, $hardware, $data={}) {
 	is($@,'') or return;
     $USER->unread_messages();
 	ok($req, 'Request');
-	rvd_back->_process_all_requests_dont_fork(1);
+	rvd_back->_process_all_requests_dont_fork();
     is($req->status(),'done');
     is($req->error(),'') or exit;
 
@@ -113,6 +121,12 @@ sub test_add_hardware_request($vm, $domain, $hardware, $data={}) {
     }
     my $info = $domain->info(user_admin);
     is(scalar(@{$info->{hardware}->{$hardware}}), $numero, "screen ".$domain->name) or exit;
+    if ( ref($info->{hardware}->{$hardware}->[-1])) {
+        ok($info->{hardware}->{$hardware}->[-1]->{driver}, "screen ".$domain->name
+            ."\n".Dumper($info->{hardware}->{$hardware}->[-1])) or exit
+        ok($info->{hardware}->{$hardware}->[-1]->{name}, "screen ".$domain->name
+            ."\n".Dumper($info->{hardware}->{$hardware}->[-1])) or exit
+    }
 }
 
 sub test_add_cdrom($domain) {
@@ -463,18 +477,10 @@ sub test_change_network($vm, $domain) {
     test_change_network_nat($vm, $domain, $index);
 }
 
-sub test_change_screen($vm,$domain) {
-    my $domain_f = Ravada::Front::Domain->open($domain->id);
-    my $info = $domain_f->info(user_admin);
-
-    my $hardware = 'screen';
-
-}
-
 sub test_change_hardware($vm, $domain, $hardware) {
     my %sub = (
-      network => sub {}
-      ,screen => \&test_change_screen
+      network => \&test_change_network
+      ,screen => sub {}
         ,disk => \&test_change_disk
         ,mock => sub {}
          ,usb => sub {}
@@ -578,7 +584,7 @@ ok($Ravada::CONNECTOR,"Expecting conector, got ".($Ravada::CONNECTOR or '<unde>'
 remove_old_domains();
 remove_old_disks();
 
-for my $vm_name ( qw(KVM Void)) {
+for my $vm_name (reverse qw(KVM Void)) {
     my $vm;
     $vm = rvd_back->search_vm($vm_name)  if rvd_back();
 	if ( !$vm || ($vm_name eq 'KVM' && $>)) {

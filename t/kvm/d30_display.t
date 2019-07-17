@@ -179,8 +179,8 @@ sub test_x2go_spice($vm) {
 
 sub test_drivers($vm) {
     my $domain = create_domain(vm => $vm, screen => ['spice','x2go'] , active => 0);
-    my $info = $domain->info(user_admin);
-    ok(scalar(@{$info->{drivers}->{screen}}), $vm->type) or die Dumper($info->{drivers});
+
+    ok(scalar $domain->drivers('screen')) or exit;
 
 }
 

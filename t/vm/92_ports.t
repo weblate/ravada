@@ -167,7 +167,7 @@ sub test_remove_expose($domain, $request) {
     ok($public_port0,"Expecting a public port") or exit;
 
     is(scalar $domain->list_ports,1);
-    rvd_back->_process_requests_dont_fork(1);
+    rvd_back->_process_requests_dont_fork();
 
     #    my ($public_ip, $public_port) = $domain->public_address($internal_port);
     #    is($public_ip, $public_ip0);
@@ -546,6 +546,20 @@ sub test_restricted($domain, $restricted) {
     $domain->start(user => user_admin, remote_ip => $remote_ip);
     wait_ip($domain);
 
+    my $internal_net = $domain->ip;
+    $internal_net =~ s{(.*)\.\d+}{$1.0/24};
+
+    my ($n_rule_forward)
+        = search_iptable_remote(
+            node => $vm
+            ,chain => 'FORWARD'
+            ,match => 'state'
+            ,local_ip  => $internal_net
+            ,state => 'NEW,RELATED,ESTABLISHED'
+            ,jump => 'ACCEPT'
+    );
+    ok(!$n_rule_forward) or exit;
+
     my $internal_port = 22;
     $domain->expose(port => $internal_port, restricted => $restricted);
     _wait_requests($domain);
@@ -555,6 +569,16 @@ sub test_restricted($domain, $restricted) {
     my $public_port = $list_ports[0]->{public_port};
     is($list_ports[0]->{restricted}, $restricted);
 
+    ($n_rule_forward)
+        = search_iptable_remote(
+            node => $vm
+            ,chain => 'FORWARD'
+            ,match => 'state'
+            ,local_ip  => $internal_net
+            ,state => 'NEW,RELATED,ESTABLISHED'
+            ,jump => 'ACCEPT'
+    );
+    ok($n_rule_forward) or exit;
     my ($n_rule)
         = search_iptable_remote(
             local_ip => "$local_ip/32"
@@ -649,7 +673,7 @@ sub test_change_expose_3($domain) {
     $domain->start(user => user_admin, remote_ip => $remote_ip);
 
     wait_ip($domain);
-    rvd_back->_process_requests_dont_fork(1);
+    rvd_back->_process_requests_dont_fork();
 
     _wait_requests($domain);
     _check_port_rules($domain, $remote_ip);
@@ -716,7 +740,7 @@ sub _search_rules($domain, $remote_ip, $internal_port, $public_port) {
 
 sub _wait_requests($domain) {
     for ( 1 .. 120 ) {
-        rvd_back->_process_requests_dont_fork(1);
+        rvd_back->_process_requests_dont_fork();
         last if !$domain->list_requests(1);
         sleep 1;
     }
