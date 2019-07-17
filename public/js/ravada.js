@@ -360,13 +360,15 @@
             });
           };
           $scope.add_hardware = function(hardware, number, extra) {
-              if (hardware == 'disk' && ! extra) {
-                  $scope.show_new_disk = true;
+              console.log(hardware);
+              if ((hardware == 'disk' || hardware == 'screen') && ! extra) {
+                  $scope.show_new_hardware = hardware;
                   return;
               }
               if ( hardware == 'disk' && extra.device == 'cdrom') {
                   extra.driver = 'ide';
               }
+              $scope.show_new_hardware = undefined;
               $http.post('/machine/hardware/add/'
                       , JSON.stringify({ 'id_domain': $scope.showmachine.id
                             ,'hardware': hardware
@@ -546,6 +548,7 @@
             };
             $scope.disk_remove = [];
             $scope.pending_before = 10;
+            $scope.show_new_hardware = undefined;
 //          $scope.getSingleMachine();
 //          $scope.updatePromise = $interval($scope.getSingleMachine,3000);
           $scope.getReqs= function() {

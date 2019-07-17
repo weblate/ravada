@@ -1,4 +1,4 @@
-<div ng-show="show_new_disk" class="form-group">
+<div ng-show="show_new_hardware == 'disk'" class="form-group">
     <h2><%=l 'Add new disk' %></h2>
     <div class="row">
         <div class="col-lg-2">
@@ -62,8 +62,8 @@
         <div class="col-mb-12 mt-3">
             <button class="btn btn-primary"
             ng-click=
-            "add_hardware('disk', value.length+1, add_disk);show_new_disk=false"><%=l 'Submit' %></button>
-            <button ng-click="show_new_disk=false"
+            "add_hardware('disk', value.length+1, add_disk);"><%=l 'Submit' %></button>
+            <button ng-click="show_new_hardware=undefined"
                 class="btn btn-outline-secondary"
             ><%=l 'Cancel' %></button>
         </div>
