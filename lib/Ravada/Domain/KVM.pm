@@ -1969,8 +1969,9 @@ sub _set_controller_network($self, $number, $data) {
 }
 
 sub _set_controller_screen($self, $number, $data) {
-    my $type = (delete $data->{type} or 'spice');
-    return $self->_set_controller_screen_spice() if $type eq 'spice';
+    my $type = (delete $data->{driver} or 'spice');
+    return $self->_set_controller_screen_spice()        if $type eq 'spice';
+    return $self->_set_controller_screen_x2go($data)    if $type eq 'x2go';
 
     confess "I cant add a new screen controller type '$type'";
 }
@@ -2059,7 +2060,13 @@ sub _remove_controller_network($self, $index) {
 }
 
 sub _remove_controller_screen($self, $index) {
-    $self->_remove_device($index,'graphics');
+    my @screens = $self->get_controller('screen');
+
+    my $screen = $screens[$index];
+    return $self->_remove_device($index,'graphics')     if $screen->{driver} eq 'spice';
+    return $self->_remove_screen_x2go($screen->{name})  if $screen->{driver} eq 'x2go';
+
+    confess "Error: I don't know how to remove a ".$screen->{driver}." screen";
 }
 
 =head2 pre_remove

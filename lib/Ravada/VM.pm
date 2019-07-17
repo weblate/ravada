@@ -1256,6 +1256,26 @@ sub iptables($self, @args) {
     warn $err if $err;
 }
 
+sub iptables_unique($self,%rule) {
+    return if $self->search_iptables(%rule);
+    return $self->iptables(%rule);
+}
+
+sub search_iptables($self, %rule) {
+    my $table = 'filter';
+    my $iptables = $self->iptables_list();
+
+    LINE:for my $line (@{$iptables->{$table}}) {
+
+        my %args = @$line;
+        for my $key (keys %rule) {
+            next LINE if !exists $args{$key} || $args{$key} ne $rule{$key};
+        }
+        return 1;
+    }
+    return 0;
+}
+
 sub iptables_list($self) {
 #   Extracted from Rex::Commands::Iptables
 #   (c) Jan Gehring <jan.gehring@gmail.com>

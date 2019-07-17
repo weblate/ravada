@@ -46,7 +46,7 @@ sub display_info($self, $user=undef, $type='void') {
     my $hardware = $self->_value('hardware');
     my $screen = $hardware->{screen};
 
-    my ($found_screen) = grep { $_->{type} eq $type} @$screen;
+    my ($found_screen) = grep { $_->{driver} eq $type} @$screen;
 
     confess "Error: I can't find graphics for screen ".($type or '<ANY>')." in ".$self->name
         ."\n".Dumper($screen) if !$found_screen;
@@ -58,14 +58,16 @@ sub display_info($self, $user=undef, $type='void') {
 sub _set_display($self, %args){
 
     my $listen_ip= (delete $args{listen_ip} or $self->_vm->listen_ip);
-    my $type= ( delete $args{type} or $self->_screen_type);
+    my $type= ( delete $args{driver} or $self->_screen_type);
+    confess if !defined $type;
 
     confess "Error: unknown args ".Dumper(\%args) if keys %args;
     confess "Error: wrong ip '$listen_ip'"
         if defined $listen_ip && $listen_ip !~ m{^\d[0-9\.]+$};
 
     for my $screen ( $self->get_controller('screen') ) {
-        next if $screen->{type} ne $type;
+        confess $self->name."\n".Dumper($screen) if !defined $screen->{driver};
+        next if $screen->{driver} ne $type;
         $screen->{ip} = $listen_ip;
         $self->_store(display => $screen);
         return $screen;
@@ -524,7 +526,7 @@ sub _set_default_info($self, $listen_ip=undef, $screen='void') {
     for my $n ( 0 .. scalar(@$screen)-1) {
         my $type = $screen->[$n];
         my $data = {
-            type => $type
+            driver => $type
             ,display => "$type://".$self->_vm->ip.":".$port
         };
         if ($type eq 'x2go') {
@@ -535,7 +537,7 @@ sub _set_default_info($self, $listen_ip=undef, $screen='void') {
         $port++;
         $self->set_controller('screen',$n+1, $data);
     }
-    $self->_set_display( listen_ip => $listen_ip, type => $screen->[0]);
+    $self->_set_display( listen_ip => $listen_ip, driver => $screen->[0]);
     return $info;
 }
 
@@ -681,6 +683,24 @@ sub autostart {
     return $self->_value('autostart');
 }
 
+sub _set_default_data_screen($self, $data) {
+    $data->{driver} = 'void' if !$data->{driver};
+    if ($data->{driver} eq 'x2go') {
+            $data->{public_port} = $PORT;
+    } else {
+            $data->{port} = $PORT;
+    }
+
+    $data->{display} = "$data->{driver}//".$self->_vm->listen_ip.":".$PORT
+        if !$data->{display};
+}
+
+sub _set_default_data($self, $name, $data) {
+    return if !ref($data);
+    return $self->_set_default_data_screen($data) if $name eq 'screen';
+    $data->{driver} = "void" if !exists $data->{driver};
+}
+
 sub set_controller($self, $name, $number=undef, $data='foo') {
     my $hardware = $self->_value('hardware');
 
@@ -691,14 +711,15 @@ sub set_controller($self, $name, $number=undef, $data='foo') {
     $number = $#$list if !defined $number;
 
     confess if $name eq 'screen' && !ref($data);
-    my $ip = $self->_vm->ip;
+
+    $self->_set_default_data($name, $data);
 
     if ($number > $#$list) {
         for ( $#$list+1 .. $number-1 ) {
-            if ($name eq 'screen') {
+            if (ref($data)) {
                 push @$list,$data;
             } else {
-                push @$list,("$data ".($_+1));
+                push @$list,"$data $_";
             }
         }
     } else {

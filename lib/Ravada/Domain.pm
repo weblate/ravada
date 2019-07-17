@@ -1200,6 +1200,7 @@ sub _display_file_sub($self,$screen) {
 
 sub display($self, $user) {
     my $display_info = $self->display_info($user);
+    confess Dumper($display_info) if !exists $display_info->{display};
     return $display_info->{display};
 }
 
@@ -1333,7 +1334,7 @@ sub _screen_type($self, $info=undef) {
     }
 
     for my $screen ( @{$screen} ) {
-        return $screen->{type};
+        return $screen->{driver};
     }
     $screen_type = $self->_default_screen_type if !$screen_type;
     return $screen_type;
@@ -2324,6 +2325,16 @@ sub _open_exposed_port_client($self, $public_port) {
 
     my $local_ip = $self->_vm->ip;
 
+    my $local_net = $self->ip;
+    $local_net =~ s{(.*)\.\d+}{$1.0/24};
+
+    $self->_vm->iptables_unique(
+        A => 'FORWARD'
+        ,m => 'state'
+        ,d => $local_net
+        ,state => 'NEW,RELATED,ESTABLISHED'
+        ,j => 'ACCEPT'
+    );
     $self->_vm->iptables(
         A => $IPTABLES_CHAIN
         ,s => $remote_ip
@@ -3070,6 +3081,20 @@ sub get_controllers($self) {
         $info->{$name} = [$self->get_controller($name)];
     }
     return $info;
+}
+
+sub _set_controller_screen_x2go($self, $data) {
+    my $port = (delete $data->{port} or 22);
+    my $type = (delete $data->{driver} or 'x2go');
+
+    confess "Error: Unknown args ".Dumper($data) if keys %$data;
+
+    $self->expose( port => $port, name => $type);
+}
+
+sub _remove_screen_x2go($self, $name) {
+    my $port = $self->exposed_port($name);
+    $self->remove_expose($port->{internal_port});
 }
 
 =head2 drivers

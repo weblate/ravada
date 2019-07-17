@@ -818,7 +818,7 @@ sub _update_domain_drivers_options_screen($self) {
 
     my @options_all = ('spice','x2go');
     my %options = (
-        void =>['void', @options_all]
+        Void =>['void', @options_all]
         ,KVM =>\@options_all
     );
 

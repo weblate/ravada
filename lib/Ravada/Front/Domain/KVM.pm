@@ -117,7 +117,8 @@ sub _get_controller_screen_x2go($self) {
     delete $info->{id_domain};
     delete $info->{id};
 
-    $info->{type} = 'x2go';
+    $info->{driver} = 'x2go';
+    $info->{name} = $info->{driver};
     lock_hash(%$info);
 
     return ($info);
@@ -144,10 +145,12 @@ sub _get_controller_screen_spice($self) {
 
         my $display = {
             type => $type
+            ,name => $type
             ,port => $port
             ,tls_port => $tls_port
             ,ip => $address
             ,display => ''
+            ,driver => $type
         };
         $display->{display} = $type."://$address:$port" if $port;
         push @ret,($display);
