@@ -11,6 +11,7 @@ Ravada::Front::Domain - Frontent domain information for Ravada
 
 use Carp qw(cluck confess croak);
 use Data::Dumper;
+use Hash::Util qw(lock_hash unlock_hash);
 use JSON::XS;
 use Moose;
 
@@ -91,9 +92,10 @@ sub display_file_tls($self, $user) {
 
 sub display_file($self,$user, $screen=$self->_screen_type) {
     my $file_json = $self->_data('display_file');
-    confess if !$file_json;
+    confess "Error: no json for display_file $screen" if !$file_json;
     return '' if !$file_json;
     my $file = decode_json($file_json);
+    warn Dumper($file);
     return $file->{$screen};
 }
 
@@ -206,6 +208,32 @@ sub _display_file_sub_local($self, $screen) {
 
 sub _display_file_void($self, $user) {
     return "port=mock\n";
+}
+
+sub _get_controller_screen_type($self, $type) {
+
+    if ($type eq 'x2go') {
+        my $port;
+
+        eval { $port = $self->exposed_port($type) };
+        return if $@ && $@ =~ /Exposed.*not found/i;
+        die $@ if $@;
+
+        return if !$port;
+    }
+    my $info = $self->display_info(Ravada::Utils::user_daemon, $type);
+    unlock_hash(%$info);
+
+    delete $info->{restricted};
+    delete $info->{id_domain};
+    delete $info->{id};
+
+    $info->{driver} = $type;
+    $info->{name} = $info->{driver};
+    $info->{file_extension} = $type;
+    lock_hash(%$info);
+
+    return ($info);
 }
 
 1;

@@ -9,6 +9,9 @@ use Test::More;
 use lib 't/lib';
 use Test::Ravada;
 
+no warnings "experimental::signatures";
+use feature qw(signatures);
+
 use_ok('Ravada');
 
 init();
@@ -146,9 +149,7 @@ sub test_domain_password1 {
     return $domain;
 }
 
-sub test_any_network_password {
-    my $vm_name = shift;
-    my $vm = rvd_back->search_vm($vm_name);
+sub test_any_network_password($vm) {
 
     add_network_10(0);
     add_network_any(1);
@@ -175,14 +176,11 @@ sub test_any_network_password {
     like($password,qr/./,"Expecting a password, got '".($password or '')."'");
     $domain->shutdown_now($USER);
 
+    $domain->remove(user_admin);
 }
 
-sub test_any_network_password_hybernate{
-    my $vm_name = shift;
-    my $vm = rvd_back->search_vm($vm_name);
+sub test_password_hybernate_start($vm) {
 
-    add_network_10(0);
-    add_network_any(1);
 
     my $domain = $vm->create_domain( name => new_domain_name
                 , disk => 1024 * 1024
@@ -206,19 +204,32 @@ sub test_any_network_password_hybernate{
 
     is($password2,$password);
 
-    # create another domain to start from far away
-    $domain = $vm->create_domain( name => new_domain_name
-                , disk => 1024 * 1024
-                , id_iso => search_id_iso('Alpine') , id_owner => $USER->id);
+    $domain->remove(user_admin);
+}
 
+sub test_password_hybernate_create($vm) {
+
+    # create another domain to start from local
+    my $domain = $vm->create_domain( name => new_domain_name
+                , disk => 1024 * 1024
+                , id_iso => search_id_iso('Alpine') , id_owner => $USER->id
+                , remote_ip => '127.0.0.1'
+            );
+
+    my ($password, $password2);
+    eval { $password = $domain->spice_password() };
+    is($password, undef,"Expecting no password, got '".($password or '')."' after create");
     eval {
-        $domain->start($USER)   if !$domain->is_active;
+        $domain->start(user => $USER, remote_ip => '127.0.0.1')   if !$domain->is_active;
         for ( 1 .. 10 ){
             last if $domain->is_active;
             sleep 1;
         }
         $domain->hybernate($USER);
     };
+    eval { $password = $domain->spice_password() };
+    is($password, undef,"Expecting no password, got '".($password or '')."' after hibernate");
+
     ok(!$@,"Expecting no error after \$domain->hybernate, got : '".($@ or '')."'");
     is($domain->is_active(),0,"Domain should not be active, got :".$domain->is_active);
     is($domain->is_hibernated(),1,"Domain should be hybernated");
@@ -228,7 +239,7 @@ sub test_any_network_password_hybernate{
 
     eval { $password = $domain->spice_password() };
     is($@,'',"Expecting no error after \$domain->spice_password hybernate/start");
-    is($password, undef,"Expecting password, got '".($password or '')."' after hybernate");
+    is($password, undef,"Expecting no password, got '".($password or '')."' after hybernate") or exit;
     is($domain->spice_password,$password);
 
     $domain->shutdown_now($USER);
@@ -394,11 +405,15 @@ SKIP: {
     is($password,undef,"Expecting no password, got : '".($password or '')."'");
     $domain2->shutdown_now($USER)   if $domain2->is_active;
 
+    add_network_10(0);
+    add_network_any(1);
+    test_password_hybernate_start($vm);
+    test_password_hybernate_create($vm);
+
     test_reopen($vm_name);
     test_domain_no_password($vm_name);
 
-    test_any_network_password($vm_name);
-    test_any_network_password_hybernate($vm_name);
+    test_any_network_password($vm);
 }
 
 clean();

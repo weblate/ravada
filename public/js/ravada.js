@@ -613,11 +613,6 @@
                 var seconds = 1000;
                 $http.get('/machine/info/'+$scope.id_domain+'.json').then(function(response) {
                     $scope.domain = response.data;
-                    if ($scope.domain.spice_password) {
-                        var copyTextarea = document.querySelector('.js-copytextarea');
-                        copyTextarea.value = $scope.domain.spice_password;
-                        copyTextarea.length = 5;
-                    }
                     if ($scope.domain.is_active) {
                         seconds = 5000;
                         $scope.redirect();
@@ -625,10 +620,11 @@
                             location.href='/machine/display/'+$scope.domain.id+".vv";
                             redirected_display=true;
                         }
+                    } else {
+                        $timeout(function() {
+                            $scope.get_domain_info();
+                        },seconds);
                     }
-                    $timeout(function() {
-                        $scope.get_domain_info();
-                    },seconds);
                 });
             }
 
@@ -651,15 +647,15 @@
                 },1000);
             }
         }
-        $scope.copy_password= function() {
+        $scope.copy_password= function(driver) {
             $scope.view_password=1;
-            var copyTextarea = document.querySelector('.js-copytextarea');
+            var copyTextarea = document.querySelector('.js-copytextarea-'+driver);
             if (copyTextarea) {
                     copyTextarea.select();
                     try {
                         var successful = document.execCommand('copy');
                         var msg = successful ? 'successful' : 'unsuccessful';
-                        console.log('Copying text command was ' + msg);
+                        console.log('Copying text command for '+driver+" was " + msg);
                         $scope.password_clipboard=successful;
                     } catch (err) {
                         console.log('Oops, unable to copy');
@@ -668,7 +664,7 @@
             }
         };
         $scope.redirect = function() {
-            if (!$scope.redirect_done) {
+            if (0 && !$scope.redirect_done) {
                 $timeout(function() {
                     if(typeof $_anonymous != "undefined" && $_anonymous){
                         window.location.href="/anonymous";                        
@@ -695,16 +691,16 @@
                 $scope.auto_view = response.auto_view;
             });
         };
-        $scope.copy_password= function() {
+        $scope.copy_password= function(driver) {
                     $scope.view_password=1;
-                    var copyTextarea = document.querySelector('.js-copytextarea');
+                    var copyTextarea = document.querySelector('.js-copytextarea-'+driver);
               if (copyTextarea) {
 
                     copyTextarea.select();
                     try {
                         var successful = document.execCommand('copy');
                         var msg = successful ? 'successful' : 'unsuccessful';
-                        console.log('Copying text command was ' + msg);
+                        console.log('Copying text command for '+driver+' was ' + msg);
                         $scope.password_clipboard=successful;
                     } catch (err) {
                         console.log('Oops, unable to copy');

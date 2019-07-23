@@ -143,24 +143,6 @@ sub test_shutdown_domain {
 
 }
 
-sub test_vm_ro {
-    my $vm_name = shift;
-
-
-    my $name = new_domain_name();
-
-    my $vm = $RVD_FRONT->open_vm($vm_name);
-    
-    my $domain;
-    eval { $domain = $vm->create_domain(
-        name => $name
-        ,active => 0
-        ,create_args($vm_name)
-        );
-    };
-    ok(!$domain,"I shouldn't create a domain in read only $vm_name");
-
-}
 ##############################################################3
 
 remove_old_domains();
@@ -172,7 +154,6 @@ for my $vm_name (qw(Void KVM)) {
         diag("Skipping VM $vm_name in this system");
         next;
     }
-    test_vm_ro($vm_name);
     my $dom_name = test_create_domain($vm_name);
     test_start_domain($vm_name, $dom_name);
     test_shutdown_domain($vm_name, $dom_name);

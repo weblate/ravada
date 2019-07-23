@@ -149,6 +149,7 @@ sub create_domain(@args) {
      my $active = (delete $args{active} or 0);
      my $memory = ( delete $args{memory} or 1024 * 256 );
     my $vm_name = delete $args{vm};
+    my $remote_ip = delete $args{remote_ip};
 
     confess "Error: unknown args ".Dumper(\%args) if keys %args;
 
@@ -175,6 +176,7 @@ sub create_domain(@args) {
     my $name = new_domain_name();
 
     my %arg_create = (id_iso => $id_iso);
+    $arg_create{remote_ip} = $remote_ip if defined $remote_ip;
 
     my $domain;
     eval { $domain = $vm->create_domain(name => $name
@@ -835,7 +837,6 @@ sub search_iptable_remote {
         my %args = @$line;
         next if $args{A} ne $chain;
 
-        warn Dumper(\%args) if $chain eq 'FORWARD' && $args{d} && $args{d} =~ /^192/;
         $count++;
 
         if(

@@ -58,11 +58,10 @@ sub test_rename_domain {
         ok(!$@,"Expecting error='' , got ='".($@ or '')."'") or return;
     }
 
-    my $vm= rvd_front->search_vm($vm_name);
-    my $domain0 = $vm->search_domain($domain_name);
+    my $domain0 = rvd_front->search_domain($domain_name);
     ok(!$domain0,"[$vm_name] Expecting not found $domain_name");
 
-    my $domain1 = $vm->search_domain($new_domain_name);
+    my $domain1 = rvd_front->search_domain($new_domain_name);
     ok($domain1,"[$vm_name] Expecting renamed domain $new_domain_name") 
         or return;
 
@@ -104,12 +103,10 @@ sub test_req_rename_domain {
             or return;
     }
     {
-        my $vm = rvd_front->search_vm($vm_name);
-
-        my $domain0 = $vm->search_domain($domain_name);
+        my $domain0 = rvd_front->search_domain($domain_name);
         ok(!$domain0,"[$vm_name-req] Expecting not found $domain_name");
 
-        my $domain1 = $vm->search_domain($new_domain_name);
+        my $domain1 = rvd_front->search_domain($new_domain_name);
         ok($domain1,"[$vm_name-req] Expecting renamed domain "
                         ."$new_domain_name") or return;
 

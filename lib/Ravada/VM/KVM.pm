@@ -724,6 +724,7 @@ sub _domain_create_from_iso {
         croak "argument $_ required"
             if !$args{$_};
     }
+    confess if $args{remote_ip} && $args{remote_ip} ne '127.0.0.1' && ! $args{spice_password};
     my $remove_cpu = delete $args2{remove_cpu};
     for (qw(disk swap active request vm memory iso_file id_template volatile spice_password
             screen
@@ -790,14 +791,11 @@ sub _domain_create_from_iso {
     $self->_xml_modify_usb($xml);
     _xml_modify_video($xml);
 
-    my ($domain, $spice_password)
-        = $self->_domain_create_common($xml,%args);
+    my $domain = $self->_domain_create_common($xml,%args);
     $domain->_insert_db(name=> $args{name}, id_owner => $args{id_owner}
         , id_vm => $self->id
     );
 
-    $domain->_set_spice_password($spice_password)
-        if $spice_password;
     $domain->xml_description();
 
     return $domain;
@@ -826,8 +824,9 @@ sub _domain_create_common {
         if ($remote_ip) {
             my $network = Ravada::Network->new(address => $remote_ip);
             $spice_password = undef if !$network->requires_password;
+            $listen_ip = $self->_vm->listen_ip($remote_ip);
         }
-        $self->_xml_modify_spice_port($xml, $spice_password);
+        $self->_xml_modify_spice_port($xml, $spice_password, $listen_ip);
     } else {
         $self->_xml_remove_spice($xml);
     }
@@ -880,7 +879,7 @@ sub _domain_create_common {
         , storage => $self->storage_pool
        , id_owner => $id_owner
     );
-    return ($domain, $spice_password);
+    return $domain;
 }
 
 sub _create_disk {
@@ -1002,12 +1001,11 @@ sub _domain_create_from_base {
 
     _xml_modify_disk($xml, \@device_disk);#, \@swap_disk);
 
-    my ($domain, $spice_password)
+    my $domain
         = $self->_domain_create_common($xml,%args, is_volatile => $base->volatile_clones);
     $domain->_insert_db(name=> $args{name}, id_base => $base->id, id_owner => $args{id_owner}
         , id_vm => $self->id
     );
-    $domain->_set_spice_password($spice_password) if $args{screen} eq 'spice';
     $domain->xml_description();
     return $domain;
 }
@@ -1494,7 +1492,6 @@ sub _define_xml {
 
     $self->_xml_modify_mac($doc);
     $self->_xml_modify_uuid($doc);
-    $self->_xml_modify_spice_port($doc);
     _xml_modify_video($doc);
 
     return $doc;
@@ -1549,6 +1546,7 @@ sub _xml_modify_spice_port($self, $doc, $password=undef, $listen_ip=$self->liste
 
     $listen->setAttribute(type => 'address');
     $listen->setAttribute(address => $listen_ip);
+
 }
 
 sub _xml_remove_spice($self, $doc){

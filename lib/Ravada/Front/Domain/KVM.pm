@@ -29,6 +29,7 @@ our %GET_DRIVER_SUB = (
      ,playback => \&_get_driver_playback
      ,streaming => \&_get_driver_streaming
      ,disk => \&_get_driver_disk
+     ,screen => \&_get_driver_screen
 );
 
 
@@ -42,8 +43,7 @@ sub list_controllers($self) {
 
 sub _get_controller_usb {
 	my $self = shift;
-    $self->xml_description if !$self->readonly();
-    my $doc = XML::LibXML->load_xml(string => $self->_data_extra('xml'));
+    my $doc = XML::LibXML->load_xml(string => $self->xml_description);
     
     my @ret;
     
@@ -62,8 +62,7 @@ sub _get_controller_disk($self) {
 }
 
 sub _get_controller_network($self) {
-    $self->xml_description if !$self->readonly();
-    my $doc = XML::LibXML->load_xml(string => $self->_data_extra('xml'));
+    my $doc = XML::LibXML->load_xml(string => $self->xml_description);
 
     my @ret;
 
@@ -97,65 +96,42 @@ sub _get_controller_network($self) {
 }
 
 sub _get_controller_screen($self) {
-    return ( $self->_get_controller_screen_spice
-            ,$self->_get_controller_screen_x2go
+    return ( $self->_get_controller_screen_spice()
+            ,$self->_get_controller_screen_type('x2go')
         );
 }
 
-sub _get_controller_screen_x2go($self) {
-    my $port;
-
-    eval { $port = $self->exposed_port('x2go') };
-    return if $@ && $@ =~ /Exposed.*not found/i;
-    die $@ if $@;
-
-    return if !$port;
-    my $info = $self->display_info(Ravada::Utils::user_daemon, 'x2go');
-    unlock_hash(%$info);
-
-    delete $info->{restricted};
-    delete $info->{id_domain};
-    delete $info->{id};
-
-    $info->{driver} = 'x2go';
-    $info->{name} = $info->{driver};
-    lock_hash(%$info);
-
-    return ($info);
-}
-
 sub _get_controller_screen_spice($self) {
-    my $xml;
-    if (! $self->readonly ) {
-        $xml = $self->xml_description;
-    } else {
-        $xml = $self->_data_extra('xml');
-    }
-    my $doc = XML::LibXML->load_xml(string => $xml);
+    my $xml = XML::LibXML->load_xml(string => $self->xml_description);
 
-    my @ret;
+    my ($graph) = $xml->findnodes('/domain/devices/graphics')
+        or return;
 
-    my $count = 0;
-    for my $graph ($doc->findnodes('/domain/devices/graphics')) {
+    my ($type) = $graph->getAttribute('type');
+    my ($port) = $graph->getAttribute('port');
+    my ($tls_port) = $graph->getAttribute('tlsPort');
+    my ($address) = $graph->getAttribute('listen');
 
-        my ($type) = $graph->getAttribute('type');
-        my ($address) = $graph->getAttribute('listen');
-        my $port = $graph->getAttribute('port');
-        my $tls_port = $graph->getAttribute('tlsPort');
+    die $self->name.$graph->toString if$self->is_active && !defined $port;
 
-        my $display = {
-            type => $type
-            ,name => $type
-            ,port => $port
-            ,tls_port => $tls_port
-            ,ip => $address
-            ,display => ''
-            ,driver => $type
-        };
-        $display->{display} = $type."://$address:$port" if $port;
-        push @ret,($display);
-    }
-    return @ret;
+    my $display;
+    $display = $type."://$address:$port" if defined $port;
+
+    my %display = (
+                driver => $type
+               ,port => $port
+                 ,ip => $address
+            ,display => $display
+          ,tls_port => $tls_port
+     ,file_extension => 'vv'
+    );
+
+    my ($password) = $graph->getAttribute('passwd');
+    $display{password} = $password if defined $password;
+
+    lock_hash(%display);
+
+    return (\%display);
 }
 
 =head2 get_driver
@@ -189,7 +165,7 @@ sub _get_driver_generic {
     my ($tag) = $xml_path =~ m{.*/(.*)};
 
     my @ret;
-    my $doc = XML::LibXML->load_xml(string => $self->_data_extra('xml'));
+    my $doc = XML::LibXML->load_xml(string => $self->xml_description);
 
     for my $driver ($doc->findnodes($xml_path)) {
         my $str = $driver->toString;
@@ -208,7 +184,7 @@ sub _get_driver_graphics {
     my ($tag) = $xml_path =~ m{.*/(.*)};
 
     my @ret;
-    my $doc = XML::LibXML->load_xml(string => $self->_data_extra('xml'));
+    my $doc = XML::LibXML->load_xml(string => $self->xml_description);
 
     for my $tags (qw(image jpeg zlib playback streaming)){
         for my $driver ($doc->findnodes($xml_path)) {
@@ -268,7 +244,7 @@ sub _get_driver_sound {
     my $xml_path ="/domain/devices/sound";
 
     my @ret;
-    my $doc = XML::LibXML->load_xml(string => $self->_data_extra('xml'));
+    my $doc = XML::LibXML->load_xml(string => $self->xml_description);
 
     for my $driver ($doc->findnodes($xml_path)) {
         push @ret,('model="'.$driver->getAttribute('model').'"');
@@ -285,6 +261,28 @@ sub _get_driver_disk {
     return $volumes[0]->{driver};
 }
 
+sub _get_driver_screen($self) {
+    return $self->_get_driver_hardware('screen');
+}
+
+sub _get_driver_hardware($self, $hardware) {
+    my $info = $self->info(Ravada::Utils::user_daemon);
+    return $info->{hardware}->{$hardware}->[0]->{driver};
+}
+
 sub _default_screen_type { 'spice' }
+
+sub xml_description($self, $inactive=undef) {
+    if (!defined $inactive) {
+        if (!$self->is_active) {
+            $inactive=1;
+        } else {
+            $inactive=0;
+        }
+    }
+    my $field = 'xml';
+    $field = "xml_inactive" if $inactive;
+    return $self->_data_extra($field);
+}
 
 1;

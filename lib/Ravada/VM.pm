@@ -437,6 +437,9 @@ sub _around_create_domain {
     };
     die $@ if $@ && $@ !~ /code: 55,/;
 
+    $domain->_data(spice_password => $args_create{spice_password})
+        if $args_create{spice_password};
+
     $domain->expose(port => 22,name => 'x2go') if grep /^x2go$/i,@$screen;
     $domain->info($owner);
     $domain->display($owner)    if $domain->is_active;
@@ -1164,6 +1167,7 @@ sub _run_command_local($self, @command) {
     my ($exec) = $command[0];
     confess "ERROR: Missing command $exec"  if ! -e $exec;
     run3(\@command, \$in, \$out, \$err);
+    cluck("@command") if defined $command[2] && $command[1] eq '-F' && $command[2] eq 'FORWARD';
     return ($out, $err);
 }
 
@@ -1253,25 +1257,31 @@ sub iptables($self, @args) {
 
     }
     my ($out, $err) = $self->run_command(@cmd);
-    warn $err if $err;
+    confess join(" ",@cmd)."\n$err" if $err;
+    warn $out if $out;
+    exit if $cmd[1] eq 'FORWARD';
 }
 
-sub iptables_unique($self,%rule) {
-    return if $self->search_iptables(%rule);
-    return $self->iptables(%rule);
+sub iptables_unique($self,@rule) {
+    return if $self->search_iptables(@rule);
+    return $self->iptables(@rule);
 }
 
 sub search_iptables($self, %rule) {
     my $table = 'filter';
     my $iptables = $self->iptables_list();
 
-    LINE:for my $line (@{$iptables->{$table}}) {
+    for my $line (@{$iptables->{$table}}) {
 
         my %args = @$line;
+        my $match = 1;
         for my $key (keys %rule) {
-            next LINE if !exists $args{$key} || $args{$key} ne $rule{$key};
+            $match = 0 if !exists $args{$key} || $args{$key} ne $rule{$key};
+            last if !$match;
         }
-        return 1;
+        if ( $match ) {
+            return 1;
+        }
     }
     return 0;
 }

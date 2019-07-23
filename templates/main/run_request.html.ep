@@ -32,25 +32,7 @@
             </div>
             <div "panel-body" ng-show="domain.is_active">
             <h3>Connection</h3>
-            <ul ng-show="domain.is_active">
-                <li ng-show="domain.spice_password">
-                    <%=l 'The password for this virtual machine connection is :'%>
-                    <input
-                            ng-model="password"
-                            ng-click="copy_password()"
-                            type="text" class="js-copytextarea"
-                                        value="{{domain.spice_password}}"
-                    />
-                    <i ng-show="password_clipboard"><%=l 'copied to clipboard' %></i>
-                </li>
-
-                <li><b>Display URL :</b>
-                    <a ng-click="copy_password(); redirect()"
-                        href="{{domain.display.display}}">{{domain.display.display}}</a></li>
-                </li>
-                <li><b>Display IP :</b> {{domain.display.ip}} </li>
-                <li><b>Display Port :</b> {{domain.display.port}} </li>
-            </ul>
+            %= include 'main/machine_screens'
             <h3>Machine Information</h3>
             <ul>
                 <li><b>Internal IP:</b><span ng-show="domain.ip"> {{domain.ip}}</span>
@@ -69,29 +51,6 @@
                     {{port.internal_port}}
                 </li>
             </ul>
-            </div>
-            <div ng-show="domain.is_active">
-                <div>
-                <a type="button" class="btn btn-success"
-                    ng-show="!domain.display.tls_port"
-                    ng-click="view_clicked=true; copy_password(); redirect();"
-                    href="/machine/display/{{domain.id}}.vv">
-                        <b><%=l 'view'%></b></a>
-
-                <a type="button" class="btn btn-success" ng-view="domain,display.tls_port"
-                    ng-show="domain.display.tls_port"
-                    ng-click="view_clicked_tls=true; copy_password(); redirect();"
-                    href="/machine/display-tls/{{domain.id}}-tls.vv">
-                        <b><%=l 'view'%></b></a>
-                </div>
-                <div>
-                <span ng-show="view_clicked"><%=l 'If you can not see the machine screen in a few seconds check for a file called' %> <b>{{domain.id}}.vv</b> <%=l 'in your downloads folder.' %>
-                </span>
-                <span ng-show="view_clicked_tls"><%=l 'If you can not see the machine screen in a few seconds check for a file called' %> <b>{{domain.id}}-tls.vv</b> <%=l 'in your downloads folder.' %>
-                </span>
-                <br/>
-                <i><%=l 'Press SHIFT + F12 to exit the virtual machine' %></i>
-                </div>
             </div>
         </div>
         <div>

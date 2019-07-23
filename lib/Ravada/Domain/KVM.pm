@@ -119,7 +119,9 @@ sub list_disks {
     my $self = shift;
     my @disks = ();
 
-    my $doc = XML::LibXML->load_xml(string => $self->xml_description);
+    my $xml = $self->xml_description;
+    confess $self->name if !$xml;
+    my $doc = XML::LibXML->load_xml(string => $xml);
 
     for my $disk ($doc->findnodes('/domain/devices/disk')) {
         next if $disk->getAttribute('device') ne 'disk';
@@ -135,27 +137,45 @@ sub list_disks {
     return @disks;
 }
 
-sub xml_description($self, $inactive=0) {
-    return $self->_data_extra('xml')
-        if ($self->is_removed || !$self->domain )
-            && $self->is_known;
+sub xml_description($self, $inactive=undef) {
+
+    if (!defined $inactive) {
+        if (!$self->is_active) {
+            $inactive = 1;
+        } else {
+            $inactive = 0;
+        }
+    }
+    confess if !$inactive && !$self->is_active;
+    my $field = "xml";
+    $field = "xml_inactive" if $inactive;
+
+    if (($self->is_removed || !$self->domain )
+            && $self->is_known) {
+        my $xml = $self->_data_extra($field);
+        return $xml if $xml;
+
+        # try the other field if empty
+        if ($inactive) {
+            $field = "xml";
+        } else {
+            $field = "xml_inactive";
+        }
+        return $self->_data_extra($field);
+    }
 
     confess "ERROR: KVM domain not available ".$self->is_known   if !$self->domain;
     my $xml;
     eval {
-        my @flags;
-        @flags = ( Sys::Virt::Domain::XML_INACTIVE ) if $inactive;
+        my $flags = Sys::Virt::Domain::XML_SECURE;
+        $flags += Sys::Virt::Domain::XML_INACTIVE if $inactive;
 
-        $xml = $self->domain->get_xml_description(@flags);
-        $self->_data_extra('xml', $xml) if $self->is_known
-                                        && ( $inactive
-                                                || !$self->_data_extra('xml')
-                                                || !$self->is_active
-                                        );
+        $xml = $self->domain->get_xml_description($flags);
+        $self->_data_extra($field, $xml) if $self->is_known;
     };
     confess $@ if $@ && $@ !~ /libvirt error code: 42/;
     if ( $@ ) {
-        return $self->_data_extra('xml');
+        return $self->_data_extra($field);
     }
     return $xml;
 }
@@ -622,32 +642,9 @@ sub display_info($self, $user, $type='spice') {
 }
 
 sub _display_info_spice($self, $user) {
-
-    my $xml = XML::LibXML->load_xml(string => $self->xml_description);
-    my ($graph) = $xml->findnodes('/domain/devices/graphics')
-        or confess "ERROR: I can't find graphics in ".$self->name;
-
-    my ($type) = $graph->getAttribute('type');
-    my ($port) = $graph->getAttribute('port');
-    my ($tls_port) = $graph->getAttribute('tlsPort');
-    my ($address) = $graph->getAttribute('listen');
-
-    confess "ERROR: Machine ".$self->name." is not active in node ".$self->_vm->name."\n"
-        if !$port && !$self->is_active;
-    die "Unable to get port for domain ".$self->name." ".$graph->toString
-        if !$port;
-
-    my $display = $type."://$address:$port";
-
-    my %display = (
-                type => $type
-               ,port => $port
-                 ,ip => $address
-            ,display => $display
-          ,tls_port => $tls_port
-    );
-    lock_hash(%display);
-    return \%display;
+    my @screen_spice = $self->_get_controller_screen_spice();
+    confess "I can't find graphics 'spice'" if !$screen_spice[0];
+    return $screen_spice[0]
 }
 
 =head2 is_active
@@ -689,7 +686,7 @@ sub start {
         %arg = @_;
     }
 
-    my $set_password=0;
+    my $set_password=1;
     my $remote_ip = delete $arg{remote_ip};
     my $request = delete $arg{request};
 
@@ -2414,5 +2411,4 @@ sub dettach($self, $user) {
         $self->domain->block_pull($vol,0);
     }
 }
-
 1;

@@ -70,7 +70,13 @@ sub _get_controller_mock($self, $name='mock') {
 }
 
 sub _get_controller_screen($self) {
-    return $self->_get_controller_mock('screen');
+    my @screen;
+    for my $screen ($self->_get_controller_mock('screen')) {
+        $screen->{file_extension} = $screen->{driver};
+        $screen->{file_extension} = 'vv' if $screen->{driver} =~ /spice/;
+        push @screen,($screen);
+    }
+    return @screen;
 }
 
 sub _get_controller_disk {

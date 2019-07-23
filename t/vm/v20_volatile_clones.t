@@ -409,8 +409,8 @@ sub test_ips {
             );
             if ($vm->type ne 'Void') {
                 my $xml = $clone2->xml_description;
-                my ($listen) = $xml =~ m{listen='(.*)'};
-                my ($address) = $xml =~ m{listen.*address='(.*)'};
+                my ($listen) = $xml =~ m{listen='(.*?)'};
+                my ($address) = $xml =~ m{listen.*address='(.*?)'};
                 is($listen, $ip2);
                 is($address, $ip2);
             }

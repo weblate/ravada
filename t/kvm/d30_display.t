@@ -35,7 +35,8 @@ sub test_unknown($vm) {
 }
 
 sub test_spice($vm) {
-    my $domain = create_domain(vm => $vm, screen => 'spice', active => 1);
+    my $domain = create_domain(vm => $vm, screen => 'spice', active => 1
+        , remote_ip => "1.2.3.4");
 
     if ($vm->type =~ /KVM/) {
         my $doc = XML::LibXML->load_xml( string => $domain->xml_description());
@@ -43,6 +44,7 @@ sub test_spice($vm) {
 
         is(scalar @graph, 1);
         is($graph[0]->getAttribute('type'), 'spice') if $graph[0];
+
     }
 
     my $display_spice = $domain->display_file(user_admin,'spice');
@@ -79,6 +81,10 @@ sub test_spice($vm) {
             my $display_tls = $domain_f->display_file(user_admin,'spice-tls');
             ok($display_tls);
         }
+        my $info = $domain->info(user_admin);
+        ok(exists $info->{hardware}->{screen}->[0]->{password},Dumper($info->{hardware}->{screen}->[0])) or exit;
+        like($info->{spice_password},qr'.') or exit;
+        is($info->{hardware}->{screen}->[0]->{password}, $info->{spice_password});
     }
     $domain->remove(user_admin);
 }
@@ -147,26 +153,36 @@ sub test_x2go_spice($vm) {
     like($domain->display(user_admin),qr(^spice://));
 
     $domain->start(user_admin);
-    rvd_back->_process_requests_dont_fork(1);
+    rvd_back->_process_requests_dont_fork();
 
     my $domain_f = Ravada::Front::Domain->open($domain->id);
     like($domain_f->display(user_admin),qr(^spice://));
 
     my $display_info = $domain_f->display_info(user_admin);
-    like($display_info->{display},qr{^spice://});
+    like($display_info->{display},qr{^spice://\d+\..*:\d+$});
 
-    my $info = $domain->info(user_admin);
-    my $screen = $info->{hardware}->{screen};
-    is (scalar(@$screen), 2);
-    is($screen->[0]->{type}, 'spice');
-    is($screen->[1]->{type}, 'x2go');
+    for my $domain0 ($domain, $domain_f) {
+        my $info = $domain0->info(user_admin);
+        my $screen = $info->{hardware}->{screen};
+        is (scalar(@$screen), 2);
+        is($screen->[0]->{driver}, 'spice');
+        is($screen->[1]->{driver}, 'x2go');
 
-    like($screen->[0]->{port}, qr'\d+$', $domain->name) or die Dumper($screen);
-    like($screen->[1]->{public_port}, qr'^\d+$');
+        like($screen->[0]->{port}, qr'\d+$', $domain->name." readonly = ".$domain->readonly)
+            or die Dumper($screen);
+        like($screen->[1]->{port}, qr'^\d+$',Dumper($screen->[1]));
 
-    like($screen->[0]->{display}, qr'^spice://', $domain->name) or exit;
-    like($screen->[1]->{display}, qr'^x2go://');
+        like($screen->[0]->{display}, qr'^spice://', $domain->name) or exit;
+        like($screen->[1]->{display}, qr'^x2go://');
 
+        is($screen->[0]->{file_extension}, 'vv', $domain0->readonly.Dumper($screen->[0]));
+        is($screen->[1]->{file_extension}, 'x2go');
+
+        for ( 0 .. 1 ) {
+            my $file = $domain0->display_file(user_admin, $screen->[$_]->{driver});
+            ok($file,"Expecting display file for ".$screen->[$_]->{driver}) or exit;
+        }
+    }
     my $display_file_spice = $domain_f->display_file(user_admin,'spice');
     like($display_file_spice,qr(type=spice)m);
     like($display_file_spice,qr(port=\d)m);

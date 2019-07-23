@@ -1372,6 +1372,8 @@ sub _upgrade_tables {
     $self->_upgrade_table('domains','needs_restart','int not null default 0');
     $self->_upgrade_table('domains_network','allowed','int not null default 1');
 
+    $self->_upgrade_table('domains_kvm','xml_inactive','text');
+
     $self->_upgrade_table('iptables','id_vm','int DEFAULT NULL');
     $self->_upgrade_table('vms','security','varchar(255) default NULL');
     $self->_upgrade_table('grant_types','enabled','int not null default 1');

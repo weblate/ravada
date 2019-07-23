@@ -728,6 +728,7 @@ Returns a read-only connection to the VM.
 =cut
 
 sub open_vm {
+    confess "Deprecated: do not open VM from frontend";
     my $self = shift;
     my $type = shift or confess "I need vm type";
     my $class = "Ravada::VM::$type";

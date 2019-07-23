@@ -105,8 +105,7 @@ sub test_req_create_domain_iso {
     my $req2 = Ravada::Request->open($req->id);
     ok($req2->{id} == $req->id,"req2->{id} = ".$req2->{id}." , expecting ".$req->id);
 
-    my $vm = rvd_front()->search_vm($vm_name);
-    my $domain =  $vm->search_domain($name);
+    my $domain =  rvd_front->search_domain($name);
 
     ok($domain,"[$vm_name] I can't find domain $name");
     ok(!$domain->is_locked,"Domain $name should not be locked");
@@ -184,8 +183,7 @@ sub test_req_prepare_base {
     }
     my $req;
     {
-        my $vm = rvd_front()->search_vm($vm_name);
-        my $domain = $vm->search_domain($name);
+        my $domain = rvd_front->search_domain($name);
         ok($domain, "Searching for domain $name, got ".ref($name)) or return;
         ok(!$domain->is_base, "Expecting domain base=0 , got: '".$domain->is_base."'");
         $req = Ravada::Request->prepare_base(
@@ -203,8 +201,7 @@ sub test_req_prepare_base {
     wait_request($req);
     ok(!$req->error,"Expecting error='', got '".($req->error or '')."'");
 
-    my $vm = rvd_front()->search_vm($vm_name);
-    my $domain2 = $vm->search_domain($name);
+    my $domain2 = rvd_front->search_domain($name);
     ok($domain2->is_base, "Expecting domain base=1 , got: '".$domain2->is_base."'");# or exit;
     $domain2->is_public(1);
     my @unread_messages = $USER->unread_messages;
@@ -429,8 +426,7 @@ sub test_req_remove_base {
             .", got : '".$req->error."'");
 
     {
-        my $domain_base = rvd_front->search_vm($vm_name)
-                            ->search_domain($name_base);
+        my $domain_base = rvd_front->search_domain($name_base);
         ok($domain_base,"[$vm_name] I can't find domain $name_base")
             or return;
         ok(!$domain_base->is_base());

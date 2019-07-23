@@ -83,7 +83,7 @@ sub test_new_domain_req {
     like($req->error,qr(.));
 
     my $domain = rvd_back->search_domain($name);
-    ok($domain) or return;
+    ok($domain,"Expecting machine $name created") or exit;
 
     my $req_start = Ravada::Request->start_domain(
         uid => user_admin->id

@@ -276,10 +276,11 @@ sub test_localhost {
 
     my $remote_ip = '127.0.0.1';
 
+    is($vm->listen_ip($remote_ip),$remote_ip) or exit;
     $domain->start( user => user_admin, remote_ip => $remote_ip);
 
     my ($local_ip, $local_port) = $domain->display(user_admin) =~ m{(\d+\.\d+\.\d+\.\d+)\:(\d+)};
-    is($local_ip, $remote_ip);
+    is($local_ip, $remote_ip, $vm->type." ".$domain->name) or exit;
 #    test_chain($vm->type, $vm->ip, $local_port, $remote_ip,1);
     my %test_args= (
            remote_ip => $remote_ip

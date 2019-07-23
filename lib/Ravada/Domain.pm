@@ -142,7 +142,6 @@ has 'description' => (
 #
 
 around 'display_info' => \&_around_display_info;
-around 'display_file_tls' => \&_around_display_file_tls;
 
 around 'add_volume' => \&_around_add_volume;
 around 'remove_volume' => \&_around_remove_volume;
@@ -1226,6 +1225,7 @@ sub _display_info_x2go($self, $user) {
     my %info = %$port;
     $info{ip} = $ip;
     $info{display} = "x2go://$ip:".$port->{public_port};
+    $info{port} = delete $info{public_port};
     return \%info;
 
 }
@@ -1249,7 +1249,7 @@ xinerama=false
 clipboard=both
 usekbd=true
 type=auto
-sshport=$info->{public_port}
+sshport=$info->{port}
 sound=true
 soundsystem=pulse
 startsoundsystem=true
@@ -1277,8 +1277,7 @@ sub _display_file_spice($self,$user, $tls = 0) {
 
     my $display = $self->display_info($user,'spice');
 
-    confess "I can't find ip port in ".Dumper($display)
-        if !$display->{ip} || !exists $display->{port} || !$display->{port};
+    return if !defined $display->{port};
 
     my $ret =
         "[virt-viewer]\n"
@@ -1334,6 +1333,7 @@ sub _screen_type($self, $info=undef) {
     }
 
     for my $screen ( @{$screen} ) {
+        confess Dumper($screen) if !exists $screen->{driver};
         return $screen->{driver};
     }
     $screen_type = $self->_default_screen_type if !$screen_type;
@@ -2302,29 +2302,27 @@ sub _open_exposed_port($self, $internal_port) {
     my $local_ip = $self->_vm->ip;
     my $internal_ip = $self->ip;
     confess "Error: I can't get the internal IP of ".$self->name
-        if !$internal_ip || $internal_ip !~ /^(\d+\.\d+)/;
+    if !$internal_ip || $internal_ip !~ /^(\d+\.\d+)/;
 
-    $self->_vm->iptables(
-                t => 'nat'
-                ,A => 'PREROUTING'
-                ,p => 'tcp'
-                ,d => $local_ip
-                ,dport => $public_port
-                ,j => 'DNAT'
-                ,'to-destination' => "$internal_ip:$internal_port"
-    ) if !$>;
+    if ( !$> ) {
+        $self->_vm->iptables(
+            t => 'nat'
+            ,A => 'PREROUTING'
+            ,p => 'tcp'
+            ,d => $local_ip
+            ,dport => $public_port
+            ,j => 'DNAT'
+            ,'to-destination' => "$internal_ip:$internal_port"
+        );
 
-    if ($restricted) {
-        $self->_open_exposed_port_client($public_port);
+        if ($restricted) {
+            $self->_open_exposed_port_client($public_port);
+        }
+        $self->_open_iptables_state();
     }
 }
 
-sub _open_exposed_port_client($self, $public_port) {
-    my $remote_ip = $self->remote_ip;
-    return if !$remote_ip;
-
-    my $local_ip = $self->_vm->ip;
-
+sub _open_iptables_state($self) {
     my $local_net = $self->ip;
     $local_net =~ s{(.*)\.\d+}{$1.0/24};
 
@@ -2335,6 +2333,14 @@ sub _open_exposed_port_client($self, $public_port) {
         ,state => 'NEW,RELATED,ESTABLISHED'
         ,j => 'ACCEPT'
     );
+}
+
+sub _open_exposed_port_client($self, $public_port) {
+    my $remote_ip = $self->remote_ip;
+    return if !$remote_ip;
+
+    my $local_ip = $self->_vm->ip;
+
     $self->_vm->iptables(
         A => $IPTABLES_CHAIN
         ,s => $remote_ip

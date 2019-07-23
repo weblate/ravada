@@ -679,11 +679,13 @@ get '/machine/display/(:type)/(:id).(:ext)' => sub {
         if $USER->id ne $domain->id_owner
         && !$USER->is_admin;
 
-    $c->res->headers->content_type('application/'.$c->stash('type'));
-    $c->res->headers->content_disposition(
-        "inline;filename=".$domain->id.".".$c->stash('ext'));
+#    $c->res->headers->content_type('application/'.$c->stash('type'));
+#   $c->res->headers->content_disposition(
+#        "inline;filename=".$domain->id.".".$c->stash('ext'));
 
-    return $c->render(data => $domain->display_file($USER,$c->stash('type')));
+#    return $c->render(data => $domain->display_file($USER,$c->stash('type')));
+    my $type = $c->stash('type');
+    return $c->render(template => 'templates/display/'.$type);
 };
 
 get '/machine/display/(:id).vv' => sub {

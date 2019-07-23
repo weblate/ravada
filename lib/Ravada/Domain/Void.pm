@@ -69,6 +69,9 @@ sub _set_display($self, %args){
         confess $self->name."\n".Dumper($screen) if !defined $screen->{driver};
         next if $screen->{driver} ne $type;
         $screen->{ip} = $listen_ip;
+        if ($screen->{port}) {
+            $screen->{display} = "$type://$listen_ip:".$screen->{port};
+        }
         $self->_store(display => $screen);
         return $screen;
     }
@@ -529,11 +532,7 @@ sub _set_default_info($self, $listen_ip=undef, $screen='void') {
             driver => $type
             ,display => "$type://".$self->_vm->ip.":".$port
         };
-        if ($type eq 'x2go') {
-            $data->{public_port} = $port;
-        } else {
-            $data->{port} = $port;
-        }
+        $data->{port} = $port;
         $port++;
         $self->set_controller('screen',$n+1, $data);
     }

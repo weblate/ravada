@@ -118,7 +118,7 @@ sub test_settings {
     for my $driver ( Ravada::Domain::drivers(undef,undef,$vm_name) ) {
 #        next if $driver->name ne 'video';
 #        diag("Testing drivers for $vm_name ".$driver->name);
-        test_drivers_id($vm_name, $driver->name);
+        test_drivers_id($vm_name, $driver->name) if $driver->name ne 'screen';
     }
 }
 
