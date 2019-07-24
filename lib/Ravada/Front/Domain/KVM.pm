@@ -123,6 +123,7 @@ sub _get_controller_screen_spice($self) {
                  ,ip => $address
             ,display => $display
           ,tls_port => $tls_port
+          ,content_type => 'application/x-virt-viewer'
      ,file_extension => 'vv'
     );
 

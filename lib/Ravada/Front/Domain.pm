@@ -231,6 +231,11 @@ sub _get_controller_screen_type($self, $type) {
     $info->{driver} = $type;
     $info->{name} = $info->{driver};
     $info->{file_extension} = $type;
+
+    my $content_type = "application/x-$type";
+    $content_type = "application/x-x2goclient"   if $type eq 'x2go';
+
+    $info->{content_type} = $content_type;
     lock_hash(%$info);
 
     return ($info);

@@ -679,13 +679,28 @@ get '/machine/display/(:type)/(:id).(:ext)' => sub {
         if $USER->id ne $domain->id_owner
         && !$USER->is_admin;
 
-#    $c->res->headers->content_type('application/'.$c->stash('type'));
-#   $c->res->headers->content_disposition(
-#        "inline;filename=".$domain->id.".".$c->stash('ext'));
 
 #    return $c->render(data => $domain->display_file($USER,$c->stash('type')));
     my $type = $c->stash('type');
-    return $c->render(template => 'templates/display/'.$type);
+    $type =~ s/-tls$//;
+    warn $type;
+    my $info = $domain->info($USER);
+    my ($screen) = grep {$_->{driver} eq $type } @{$info->{hardware}->{screen}};
+    #    $c->res->headers->content_type('application/x-virt-viewer');
+    $c->res->headers->content_type($screen->{content_type});
+    $c->res->headers->content_disposition(
+        "inline;filename=".$domain->id.".".$c->stash('ext'));
+
+    my $tls_port;
+    $tls_port = $screen->{tls_port} if exists $screen->{tls_port};
+
+    return $c->render(template => '/display/'.$type
+        ,format => $c->stash('ext')
+        ,ip => $screen->{ip}
+        ,port => $screen->{port}
+        ,tls_port=> $tls_port
+        ,name => $domain->name
+    );
 };
 
 get '/machine/display/(:id).vv' => sub {
