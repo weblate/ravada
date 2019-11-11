@@ -153,6 +153,7 @@ hook before_routes => sub {
     # anonymous URLs
     if (($url =~ m{^/machine/(clone|display|info|view)/}
         || $url =~ m{^/(list_bases_anonymous|request/)}i
+        || $url =~ m{^/(ws_subscribe|pingbackend.json)/?$}
         ) && !_logged_in($c)) {
         $USER = _anonymous_user($c);
         return if $USER->is_temporary;
@@ -2349,7 +2350,7 @@ sub _random_name {
 sub _new_anonymous_user {
     my $c = shift;
 
-    my $name_mojo = reverse($c->signed_cookie('mojolicious'));
+    my $name_mojo = reverse($c->signed_cookie('mojolicious') or '');
 
     my $length = 32;
     $name_mojo = _random_name($length)    if !$name_mojo;

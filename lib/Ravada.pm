@@ -1070,9 +1070,13 @@ sub _upgrade_table {
 
     my ($new_size) = $definition =~ m{\((\d+)};
     my ($new_type) = $definition =~ m{(\w+)};
+    my ($new_default) = $definition =~ m{default (.*)}i;
 
     my $sth = $dbh->column_info(undef,undef,$table,$field);
     my $row = $sth->fetchrow_hashref;
+    $row->{COLUMN_DEF} = 'NULL'
+        if $row->{IS_NULLABLE} eq 'YES' && !defined $row->{COLUMN_DEF};
+    lock_hash(%$row);
     $sth->finish;
     if ( $dbh->{Driver}{Name} =~ /mysql/
         && $row
@@ -1082,6 +1086,12 @@ sub _upgrade_table {
             && $new_size != $row->{COLUMN_SIZE}
             ) || (
                 lc($row->{TYPE_NAME}) ne lc($new_type)
+            ) || ( defined $new_default && !defined $row->{COLUMN_DEF}
+            ) || ( !defined $new_default && defined $row->{COLUMN_DEF}
+            ) || (
+                defined $new_default 
+                && defined $row->{COLUMN_DEF}
+                && lc($new_default) ne lc($row->{COLUMN_DEF})
             )
         )
     ){
@@ -1089,7 +1099,10 @@ sub _upgrade_table {
         warn "INFO: changing $field\n"
             ." $row->{COLUMN_SIZE} to ".($new_size or '')."\n"
             ." $row->{TYPE_NAME} -> $new_type \n"
+            ." ".($row->{COLUMN_DEF} or '')." -> ".($new_default or '')."\n"
             ." in $table\n$definition\n"  if $0 !~ /\.t$/;
+        warn Dumper($row);
+        exit;
         $dbh->do("alter table $table change $field $field $definition");
         return;
     }
@@ -1214,6 +1227,7 @@ sub _upgrade_tables {
     $self->_upgrade_table('requests','at_time','int(11) DEFAULT NULL');
     $self->_upgrade_table('requests','run_time','float DEFAULT NULL');
     $self->_upgrade_table('requests','retry','int(11) DEFAULT NULL');
+    $self->_upgrade_table('requests','date_changed','timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
 
     $self->_upgrade_table('iso_images','rename_file','varchar(80) DEFAULT NULL');
     $self->_clean_iso_mini();
@@ -1261,6 +1275,7 @@ sub _upgrade_tables {
     $self->_upgrade_table('domains','is_pool','int NOT NULL default 0');
 
     $self->_upgrade_table('domains','needs_restart','int not null default 0');
+
     $self->_upgrade_table('domains_network','allowed','int not null default 1');
 
     $self->_upgrade_table('iptables','id_vm','int DEFAULT NULL');

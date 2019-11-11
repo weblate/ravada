@@ -706,7 +706,9 @@ Return true if alive, false otherwise.
 sub ping_backend {
     my $self = shift;
 
-    return 1 if $self->_ping_backend_localhost();
+    my $requests = $self->list_requests(undef, 90, 1);
+    my @requests2 = grep { $_->{status} ne 'requested' } @$requests;
+    return 1 if scalar (@requests2);
 
     my $req = Ravada::Request->ping_backend();
     $self->wait_request($req, 2);
@@ -844,7 +846,7 @@ Returns a list of ruquests : ( id , domain_name, status, error )
 
 =cut
 
-sub list_requests($self, $id_domain_req=undef, $seconds=60) {
+sub list_requests($self, $id_domain_req=undef, $seconds=60, $all=0) {
 
     my @now = localtime(time-$seconds);
     $now[4]++;
@@ -882,6 +884,7 @@ sub list_requests($self, $id_domain_req=undef, $seconds=60) {
                 )->epoch;
             }
         }
+        if (!$all) {
         next if $command eq 'enforce_limits'
                 || $command eq 'refresh_vms'
                 || $command eq 'refresh_storage'
@@ -903,6 +906,7 @@ sub list_requests($self, $id_domain_req=undef, $seconds=60) {
                 && time - $epoch_date_changed > 5
                 && $status eq 'done'
                 && !$error;
+        }
         next if $id_domain_req && defined $id_domain && $id_domain != $id_domain_req;
         my $args;
         $args = decode_json($j_args) if $j_args;

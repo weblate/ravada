@@ -1,0 +1,3 @@
+<div ng-show="<%= $user->is_admin %> && pingbe_fail" class="alert alert-danger" ng-cloak>
+    <strong><%=l 'Error' %>:</strong> <%=l 'Backend no available!' %>
+</div>

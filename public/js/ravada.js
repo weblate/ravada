@@ -107,16 +107,17 @@
                 }
 
             };
-
-            $scope.list_machines_user = function() {
-                var seconds = 1000;
-                if ($scope.refresh <= 0) {
-                    var url = '/list_machines_user.json';
-                    if ($scope.anonymous) {
-                        url = '/list_bases_anonymous.json';
-                    }
-                    $http.get(url).then(function(response) {
-                        $scope.machines = response.data;
+            subscribe_list_machines_user = function(url) {
+                var channel = 'list_machines_user';
+                if ($scope.anonymous) {
+                    channel = 'list_bases_anonymous';
+                }
+                var ws = new WebSocket(url);
+                ws.onopen = function(event) { ws.send(channel) };
+                ws.onmessage = function(event) {
+                    var data = JSON.parse(event.data);
+                    $scope.$apply(function () {
+                        $scope.machines = data;
                         $scope.public_bases = 0;
                         $scope.private_bases = 0;
                         for (var i = 0; i < $scope.machines.length; i++) {
@@ -126,29 +127,27 @@
                                 $scope.private_bases++;
                             }
                         }
-                    }, function error(response) {
-                        console.log(response.status);
                     });
-                    $scope.refresh = 5;
-                } else {
-                    $scope.refresh--;
                 }
-                $timeout(function() {
-                        $scope.list_machines_user();
-                }, seconds);
             };
 
-            $url_list = "/list_bases.json";
-            if ( typeof $_anonymous !== 'undefined' && $_anonymous ) {
-                $url_list = "/list_bases_anonymous.json";
-            }
-            $http.get($url_list).then(function(response) {
-                    $scope.list_bases= response.data;
-            });
+            subscribe_ping_backend= function(url) {
+                var ws = new WebSocket(url);
+                ws.onopen = function(event) { ws.send('ping_backend') };
+                ws.onmessage = function(event) {
+                    var data = JSON.parse(event.data);
+                    $scope.$apply(function () {
+                        $scope.pingbe_fail = !data;
+                    });
+                }
+            };
+            $scope.subscribe_ws = function(url) {
+                subscribe_list_machines_user(url);
+                subscribe_ping_backend(url);
+            };
 
             $http.get('/pingbackend.json').then(function(response) {
                 $scope.pingbe_fail = !response.data;
-
             });
             $scope.only_public = false;
             $scope.toggle_only_public=function() {
