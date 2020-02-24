@@ -22,3 +22,5 @@
 
 - Turn frontend pulling to websockets [\#1187]
 - Save screenshot database [\#1207]
+- Run ravada in Docker [\#1247]
+- Copy screenshot updated to db [\#1234]
