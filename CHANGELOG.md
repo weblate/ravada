@@ -11,3 +11,4 @@
 
 - posix group with format cn=name fails [\#1319]
 - Add network hardware duplicates MAC [\#1294]
+- New created machines appear locked [\#1333]
