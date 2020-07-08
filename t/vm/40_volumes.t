@@ -477,6 +477,55 @@ sub test_search($vm_name) {
     ok(scalar @isos,"Expecting isos, got : ".Dumper(\@isos));
 }
 
+sub _change_volume_internal($domain, $old_file, $new_file) {
+    if ($domain->type eq 'Void') {
+        my $data = $domain->_load();
+        my $hardware = $data->{hardware};
+        my $device = $hardware->{device};
+        for my $vol (@$device) {
+            if ( $vol->{file} eq $old_file ) {
+                $vol->{file} = $new_file;
+                $domain->_store( hardware => $hardware );
+            }
+        }
+        die "Error: volume $old_file not found in ".Dumper($device);
+    } else {
+        warn "Error: I can't change internal volume in type ".$domain->type
+    }
+}
+
+sub test_vol_renamed($vm) {
+    my $domain = create_domain($vm);
+    $domain->add_volume(type => 'data', size => 512 * 1024);
+    $domain->add_volume(type => 'swap', size => 512 * 1024);
+    $domain->info(user_admin);
+    my $domain_f = Ravada::Front::Domain->open($domain->id);
+    my $info = $domain_f->info(user_admin);
+    my $volumes = $info->{hardware}->{disk};
+    is(scalar(@$volumes),4);
+    my ($vol_swap) = grep { $_->{file} =~ /SWAP/ } @$volumes;
+    my $old_file = $vol_swap->{file};
+    my $new_file = $old_file;
+    $new_file =~ s/(\d\d)/$1_NEW/;
+    isnt($new_file, $old_file);
+    copy($old_file, $new_file) or die "$! $old_file -> $new_file";
+    unlink $old_file or die "$! unlinking $old_file";
+
+    #    _change_volume_internal($domain, $old_file, $new_file);
+
+    $domain = Ravada::Domain->open($domain->id);
+    ok( grep(/NEW/, $domain->list_volumes) ,Dumper([$domain->list_volumes])) or exit;
+    $domain->list_volumes();
+    $domain->info(user_admin);
+    $domain_f = Ravada::Front::Domain->open($domain->id);
+    my $volumes2 = $domain_f->info(user_admin)->{hardware}->{disk};
+    is(scalar(@$volumes2),4);
+    my ($new_vol) = grep { $_->{file} =~ /NEW/ } @$volumes2;
+    ok($new_vol) or die "Expecting file called NEW in volumes ".Dumper($volumes2);
+
+    $domain->remove(user_admin);
+}
+
 #######################################################################33
 
 clean();
@@ -499,6 +548,8 @@ for my $vm_name (reverse sort @VMS) {
         skip $msg,10    if !$vm;
 
         use_ok("Ravada::VM::$vm_name");
+
+        test_vol_renamed($vm);
 
         test_too_big_prepare($vm);
 
