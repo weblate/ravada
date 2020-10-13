@@ -18,3 +18,4 @@
 - Console error with bootstrap-select 1.13.7 library [#1364]
 - Failed to download Arch linux on new machine [#1338]
 - MySQL load high [#1271]
+- Autostart only when back starts
