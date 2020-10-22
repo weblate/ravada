@@ -437,7 +437,14 @@ sub _start_checks($self, @args) {
         } else {
             $self->_balance_vm();
         }
-        $self->rsync(request => $request)  if !$self->is_volatile && !$self->_vm->is_local();
+        if ( !$self->is_volatile && !$self->_vm->is_local() ) {
+            my $req_sync_base = Ravada::Request->migrate(
+                uid => Ravada::Utils::user_daemon->id
+                ,id_domain => $self->id_base
+                ,id_node => $self->_vm->id
+            );
+            $self->rsync(request => $request);
+        }
     }
     $self->_check_free_vm_memory();
     #TODO: remove them and make it more general now we have nodes

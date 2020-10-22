@@ -3718,7 +3718,7 @@ sub _migrate_base($self, $domain, $node, $uid, $request) {
         , id_vm => $node->id
         , uid => $uid
     );
-    $request->after_request($req_base);
+    $request->after_request($req_base->id) if $req_base;
     die "Base ".$base->name." still not prepared in node ".$node->name.". Retry\n";
 }
 
@@ -3731,6 +3731,9 @@ sub _cmd_migrate($self, $request) {
 
     die "Error: user ".$user->name." not allowed to migrate domain ".$domain->name
     unless $user->is_operator;
+
+    confess "Error: undefined id_node ".Dumper($request)
+    unless defined $request->args('id_node');
 
     my $node = Ravada::VM->open($request->args('id_node'));
     $self->_migrate_base($domain, $node, $uid, $request) if $domain->id_base;

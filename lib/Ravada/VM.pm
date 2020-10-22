@@ -180,6 +180,9 @@ sub open {
 
     my $self = {};
     bless($self, $class);
+
+    confess if !defined $args{id};
+
     my $row = $self->_do_select_vm_db( id => $args{id});
     lock_hash(%$row);
     confess "ERROR: I can't find VM id=$args{id}" if !$row || !keys %$row;

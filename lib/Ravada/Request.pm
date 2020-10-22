@@ -143,6 +143,7 @@ our %CMD_NO_DUPLICATE = map { $_ => 1 }
 qw(
     set_base_vm
     remove_base_vm
+    migrate
 );
 
 our $TIMEOUT_SHUTDOWN = 120;
@@ -164,7 +165,6 @@ our %COMMAND = (
         ,commands => ['prepare_base','remove_base','set_base_vm','rebase_volumes'
                     , 'remove_base_vm'
                     , 'screenshot'
-                    , 'migrate'
                 ]
         ,priority => 6
     }
@@ -1343,6 +1343,8 @@ sub AUTOLOAD {
 
     confess "ERROR: field $name is read only"
         if $FIELD_RO{$name};
+
+    confess "Error: wrong value $value" if ref($value);
 
     my $sth = $$CONNECTOR->dbh->prepare("UPDATE requests set $name=? "
             ." WHERE id=?");
